@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html {
+        @apply scroll-smooth;
+    }
+
+    body {
+        @apply antialiased;
+    }
+
+    ::-webkit-scrollbar {
+        @apply w-2;
+    }
+
+    ::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply bg-surface-300 dark:bg-surface-700 rounded-full;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-brand-400 dark:bg-brand-500;
+    }
+
+    ::selection {
+        @apply bg-brand-200 dark:bg-brand-800 text-brand-900 dark:text-brand-100;
+    }
+}
+
+@layer components {
+    .btn-primary {
+        @apply relative overflow-hidden px-6 py-3 bg-gradient-to-r from-brand-500 to-brand-600 text-white font-semibold rounded-xl
+               hover:from-brand-600 hover:to-brand-700 active:scale-[0.98]
+               shadow-md hover:shadow-glow transition-all duration-200
+               disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+    }
+
+    .btn-secondary {
+        @apply px-6 py-3 bg-white dark:bg-surface-800 text-brand-600 dark:text-brand-400 font-semibold rounded-xl
+               border-2 border-brand-200 dark:border-brand-800
+               hover:bg-brand-50 dark:hover:bg-brand-900/30 hover:border-brand-300 dark:hover:border-brand-700
+               active:scale-[0.98] transition-all duration-200;
+    }
+
+    .btn-ghost {
+        @apply px-4 py-2 text-gray-600 dark:text-gray-300 font-medium rounded-xl
+               hover:bg-gray-100 dark:hover:bg-surface-700 active:scale-[0.98] transition-all duration-200;
+    }
+
+    .card {
+        @apply bg-white dark:bg-surface-800 rounded-2xl border border-surface-200 dark:border-surface-700/60
+               shadow-card hover:shadow-card-hover transition-all duration-300;
+    }
+
+    .input-field {
+        @apply w-full px-4 py-3 bg-surface-50 dark:bg-surface-700/50 border border-surface-200 dark:border-surface-700
+               rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500
+               focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500
+               transition-all duration-200;
+    }
+
+    .badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    }
+
+    .skeleton {
+        @apply animate-shimmer rounded-lg;
+        background-image: linear-gradient(90deg, #E6EAF2 25%, #F7F9FC 50%, #E6EAF2 75%);
+        background-size: 200% 100%;
+    }
+
+    .dark .skeleton {
+        background-image: linear-gradient(90deg, #3d4491 25%, #2f3445 50%, #3d4491 75%);
+        background-size: 200% 100%;
+    }
+
+    .glass {
+        @apply bg-white/80 dark:bg-surface-800/80 backdrop-blur-xl;
+    }
+
+    .dropdown {
+        @apply absolute right-0 mt-2 bg-white dark:bg-surface-800 rounded-2xl shadow-float
+               border border-surface-200 dark:border-surface-700/60 z-50
+               animate-scale-in origin-top-right;
+    }
+
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+@keyframes slide-down {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 300px; }
+}
+
+.animate-slide-down {
+    animation: slide-down 0.2s ease-out forwards;
+}
