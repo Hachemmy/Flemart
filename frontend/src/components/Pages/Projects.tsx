@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../i18n';
-import { getApiUrl } from '../../config/api';
+import { getApiUrl, authorizedFetch } from '../../config/api';
 import ProjectCard from '../UI/ProjectCard';
 
 interface Project {
@@ -24,6 +24,22 @@ interface GitHubRepo {
     fork: boolean;
 }
 
+interface ProjectForm {
+    title: string;
+    description: string;
+    githubLink: string;
+    readme: string;
+    status: 'success' | 'in_progress' | 'archived' | 'abandoned';
+}
+
+const emptyForm: ProjectForm = {
+    title: '',
+    description: '',
+    githubLink: '',
+    readme: '',
+    status: 'in_progress',
+};
+
 export default function Projects() {
     const { token } = useAuth();
     const { t } = useI18n();
@@ -36,6 +52,13 @@ export default function Projects() {
     const [tab, setTab] = useState<'saved' | 'github'>('saved');
     const [importing, setImporting] = useState<number | null>(null);
 
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingProject, setEditingProject] = useState<Project | null>(null);
+    const [form, setForm] = useState<ProjectForm>(emptyForm);
+    const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
     useEffect(() => {
         const fetchProjects = async () => {
             if (!token) {
@@ -45,9 +68,7 @@ export default function Projects() {
             }
 
             try {
-                const response = await fetch(`${getApiUrl()}/api/projects`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const response = await authorizedFetch(`${getApiUrl()}/api/projects`, token);
                 if (!response.ok) throw new Error(t('auth.genericError'));
                 const { projects: allProjects } = await response.json();
                 const mapped = allProjects.map((p: any) => ({
@@ -71,9 +92,7 @@ export default function Projects() {
         }
         setReposLoading(true);
         try {
-            const response = await fetch(`${getApiUrl()}/api/projects/github/repos`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const response = await authorizedFetch(`${getApiUrl()}/api/projects/github/repos`, token);
             if (!response.ok) throw new Error(t('auth.genericError'));
             const { repos: githubRepos } = await response.json();
             setRepos(githubRepos);
@@ -94,12 +113,9 @@ export default function Projects() {
         if (!token) return;
         setImporting(repo.id);
         try {
-            const response = await fetch(`${getApiUrl()}/api/projects/github/import`, {
+            const response = await authorizedFetch(`${getApiUrl()}/api/projects/github/import`, token, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: repo.name,
                     description: repo.description,
@@ -121,10 +137,119 @@ export default function Projects() {
             };
             setProjects(prev => [newProject, ...prev]);
             setRepos(prev => prev.filter(r => r.id !== repo.id));
+            setToast({ type: 'success', text: t('projects.created') });
         } catch (err: any) {
-            setError(err.message);
+            setToast({ type: 'error', text: err.message || t('projects.saveError') });
         } finally {
             setImporting(null);
+        }
+    };
+
+    const openCreate = () => {
+        setEditingProject(null);
+        setForm(emptyForm);
+        setFormError(null);
+        setModalOpen(true);
+    };
+
+    const openEdit = (project: Project) => {
+        setEditingProject(project);
+        setForm({
+            title: project.title,
+            description: project.description,
+            githubLink: project.githubLink,
+            readme: project.readme,
+            status: project.status,
+        });
+        setFormError(null);
+        setModalOpen(true);
+    };
+
+    const handleStatusChange = (id: number, newStatus: string) => {
+        setProjects(prev =>
+            prev.map(p =>
+                p.id === id ? { ...p, status: newStatus as Project['status'] } : p
+            )
+        );
+    };
+
+    const handleFormSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!token || !form.title.trim()) return;
+        setSaving(true);
+        setFormError(null);
+        try {
+            const body = {
+                title: form.title.trim(),
+                description: form.description.trim() || undefined,
+                githubLink: form.githubLink.trim() || undefined,
+                readme: form.readme.trim() || undefined,
+                status: form.status,
+            };
+            const url = editingProject
+                ? `${getApiUrl()}/api/projects/${editingProject.id}`
+                : `${getApiUrl()}/api/projects`;
+            const response = await authorizedFetch(url, token, {
+                method: editingProject ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || t('projects.saveError'));
+            }
+
+            if (editingProject) {
+                setProjects(prev =>
+                    prev.map(p =>
+                        p.id === editingProject.id
+                            ? {
+                                ...p,
+                                title: body.title,
+                                description: body.description || '',
+                                githubLink: body.githubLink || '',
+                                readme: body.readme || '',
+                                status: body.status,
+                            }
+                            : p
+                    )
+                );
+                setToast({ type: 'success', text: t('projects.updated') });
+            } else {
+                const newProject: Project = {
+                    id: data.projectId,
+                    title: body.title,
+                    description: body.description || '',
+                    githubLink: body.githubLink || '',
+                    readme: body.readme || '',
+                    status: body.status,
+                };
+                setProjects(prev => [newProject, ...prev]);
+                setToast({ type: 'success', text: t('projects.created') });
+            }
+            setModalOpen(false);
+        } catch (err: any) {
+            setFormError(err.message || t('projects.saveError'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async (project: Project) => {
+        if (!token) return;
+        if (!window.confirm(t('projects.deleteConfirm'))) return;
+        try {
+            const response = await authorizedFetch(`${getApiUrl()}/api/projects/${project.id}`, token, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || t('projects.saveError'));
+            }
+            setProjects(prev => prev.filter(p => p.id !== project.id));
+            setToast({ type: 'success', text: t('projects.deleted') });
+        } catch (err: any) {
+            setToast({ type: 'error', text: err.message || t('projects.saveError') });
         }
     };
 
@@ -149,13 +274,23 @@ export default function Projects() {
 
     return (
         <div className="space-y-6 pb-16 animate-fade-in">
-            <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                    {t('projects.title')}
-                </h1>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">
-                    {t('projects.subtitle')}
-                </p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                        {t('projects.title')}
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">
+                        {t('projects.subtitle')}
+                    </p>
+                </div>
+                <button onClick={openCreate} className="btn-primary text-sm whitespace-nowrap">
+                    <span className="flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        {t('projects.newProject')}
+                    </span>
+                </button>
             </div>
 
             <div className="flex gap-2 p-1 bg-gray-100 dark:bg-surface-800 rounded-xl">
@@ -239,12 +374,17 @@ export default function Projects() {
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 {t('projects.importHint')}
                             </p>
-                            <button
-                                onClick={() => setTab('github')}
-                                className="btn-primary text-sm"
-                            >
-                                {t('projects.viewGithub')}
-                            </button>
+                            <div className="flex gap-3 justify-center">
+                                <button
+                                    onClick={() => setTab('github')}
+                                    className="btn-secondary text-sm"
+                                >
+                                    {t('projects.viewGithub')}
+                                </button>
+                                <button onClick={openCreate} className="btn-primary text-sm">
+                                    {t('projects.newProject')}
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -252,7 +392,13 @@ export default function Projects() {
                         <div className="grid gap-4">
                             {filteredProjects.map((project, index) => (
                                 <div key={project.id} className="animate-slide-up" style={{ animationDelay: `${index * 50}ms` }}>
-                                    <ProjectCard project={project} githubLinkText={t('projects.viewOnGithub')} />
+                                    <ProjectCard
+                                        project={project}
+                                        githubLinkText={t('projects.viewOnGithub')}
+                                        onStatusChange={handleStatusChange}
+                                        onEdit={openEdit}
+                                        onDelete={handleDelete}
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -310,7 +456,7 @@ export default function Projects() {
                                                 </h3>
                                                 {repo.fork && (
                                                     <span className="badge bg-gray-100 dark:bg-surface-700 text-gray-500 dark:text-gray-400 text-[10px]">
-                                                        Fork
+                                                        {t('projects.fork')}
                                                     </span>
                                                 )}
                                                 {repo.language && (
@@ -320,7 +466,7 @@ export default function Projects() {
                                                 )}
                                             </div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">
-                                                {repo.description || 'Pas de description'}
+                                                {repo.description || t('projects.noDescription')}
                                             </p>
                                             <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">
                                                 <span className="flex items-center gap-1">
@@ -329,7 +475,7 @@ export default function Projects() {
                                                     </svg>
                                                     {repo.stargazers_count}
                                                 </span>
-                                                <span>Mis à jour le {new Date(repo.updated_at).toLocaleDateString('fr-FR')}</span>
+                                                <span>{t('projects.updatedOn')} {new Date(repo.updated_at).toLocaleDateString('fr-FR')}</span>
                                             </div>
                                             <a
                                                 href={repo.html_url}
@@ -367,10 +513,146 @@ export default function Projects() {
                 </>
             )}
 
+            {toast && (
+                <div className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-slide-up ${toast.type === 'success'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-red-600 text-white'
+                    }`}>
+                    {toast.text}
+                    <button onClick={() => setToast(null)} className="ml-2 underline">OK</button>
+                </div>
+            )}
+
             {error && (
                 <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-red-600 text-white rounded-xl shadow-lg text-sm font-medium animate-slide-up">
                     {error}
                     <button onClick={() => setError(null)} className="ml-2 underline">OK</button>
+                </div>
+            )}
+
+            {modalOpen && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => !saving && setModalOpen(false)} />
+                    <div className="relative bg-white dark:bg-surface-800 rounded-2xl shadow-float border border-gray-200 dark:border-surface-700 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
+                        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-surface-700">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {editingProject ? t('projects.editProject') : t('projects.newProject')}
+                            </h2>
+                            <button
+                                onClick={() => setModalOpen(false)}
+                                disabled={saving}
+                                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-surface-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                aria-label={t('projects.cancel')}
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleFormSubmit} className="p-5 space-y-4">
+                            {formError && (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
+                                    {formError}
+                                </div>
+                            )}
+
+                            <div>
+                                <label htmlFor="project-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('projects.titleLabel')} *
+                                </label>
+                                <input
+                                    id="project-title"
+                                    type="text"
+                                    value={form.title}
+                                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                    className="input-field"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="project-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('projects.descriptionLabel')}
+                                </label>
+                                <textarea
+                                    id="project-description"
+                                    value={form.description}
+                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                    rows={3}
+                                    className="input-field resize-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="project-link" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('projects.githubLinkLabel')}
+                                </label>
+                                <input
+                                    id="project-link"
+                                    type="url"
+                                    value={form.githubLink}
+                                    onChange={(e) => setForm({ ...form, githubLink: e.target.value })}
+                                    className="input-field"
+                                    placeholder="https://github.com/..."
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="project-readme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('projects.readmeLabel')}
+                                </label>
+                                <textarea
+                                    id="project-readme"
+                                    value={form.readme}
+                                    onChange={(e) => setForm({ ...form, readme: e.target.value })}
+                                    rows={3}
+                                    className="input-field resize-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('projects.statusLabel')}
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {statusOptions.map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => setForm({ ...form, status: opt.value as Project['status'] })}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 border ${
+                                                form.status === opt.value
+                                                    ? opt.color + ' ring-2 ring-brand-500/40 border-transparent'
+                                                    : 'bg-white dark:bg-surface-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-surface-700'
+                                            }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <button type="submit" disabled={saving || !form.title.trim()} className="btn-primary flex-1">
+                                    {saving ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            {editingProject ? t('projects.updating') : t('projects.creating')}
+                                        </span>
+                                    ) : (
+                                        t(editingProject ? 'projects.save' : 'projects.create')
+                                    )}
+                                </button>
+                                <button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="btn-ghost">
+                                    {t('projects.cancel')}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>

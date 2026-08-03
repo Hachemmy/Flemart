@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../i18n';
-import { getApiUrl } from '../../config/api';
+import { getApiUrl, authorizedFetch } from '../../config/api';
 
 interface Project {
     id: number;
@@ -16,45 +16,44 @@ interface ProjectCardProps {
     project: Project;
     githubLinkText?: string;
     onStatusChange?: (id: number, newStatus: string) => void;
+    onEdit?: (project: Project) => void;
+    onDelete?: (project: Project) => void;
 }
 
 const statusConfig = {
     success: {
         colors: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/30',
         dot: 'bg-emerald-500',
-        label: 'Reussi',
     },
     in_progress: {
         colors: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/30',
         dot: 'bg-amber-500',
-        label: 'En cours',
     },
     archived: {
         colors: 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800/20 dark:text-gray-400 dark:border-gray-700/30',
         dot: 'bg-gray-400',
-        label: 'Classe',
     },
     abandoned: {
         colors: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/30',
         dot: 'bg-red-500',
-        label: 'Abandonne',
     },
 };
 
 const allStatuses = [
-    { value: 'in_progress', label: 'En cours', dot: 'bg-amber-500' },
-    { value: 'success', label: 'Reussi', dot: 'bg-emerald-500' },
-    { value: 'archived', label: 'Classe', dot: 'bg-gray-400' },
-    { value: 'abandoned', label: 'Abandonne', dot: 'bg-red-500' },
+    { value: 'in_progress', dot: 'bg-amber-500' },
+    { value: 'success', dot: 'bg-emerald-500' },
+    { value: 'archived', dot: 'bg-gray-400' },
+    { value: 'abandoned', dot: 'bg-red-500' },
 ];
 
-export default function ProjectCard({ project, githubLinkText, onStatusChange }: ProjectCardProps) {
+export default function ProjectCard({ project, githubLinkText, onStatusChange, onEdit, onDelete }: ProjectCardProps) {
     const { t } = useI18n();
     const { token } = useAuth();
     const [showStatusMenu, setShowStatusMenu] = useState(false);
     const [currentStatus, setCurrentStatus] = useState(project.status);
     const [updating, setUpdating] = useState(false);
     const [expandedReadme, setExpandedReadme] = useState(false);
+    const [statusError, setStatusError] = useState<string | null>(null);
 
     const resolvedLinkText = githubLinkText || t('projects.viewOnGithub');
 
@@ -62,20 +61,18 @@ export default function ProjectCard({ project, githubLinkText, onStatusChange }:
         if (newStatus === currentStatus || updating) return;
         setUpdating(true);
         setShowStatusMenu(false);
+        setStatusError(null);
         try {
-            const response = await fetch(`${getApiUrl()}/api/projects/${project.id}`, {
+            const response = await authorizedFetch(`${getApiUrl()}/api/projects/${project.id}`, token, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus }),
             });
             if (!response.ok) throw new Error(t('auth.genericError'));
             setCurrentStatus(newStatus as Project['status']);
             if (onStatusChange) onStatusChange(project.id, newStatus);
-        } catch (err) {
-            console.error(err);
+        } catch {
+            setStatusError(t('auth.genericError'));
         } finally {
             setUpdating(false);
         }
@@ -86,9 +83,39 @@ export default function ProjectCard({ project, githubLinkText, onStatusChange }:
     return (
         <div className="card p-6 group hover:border-brand-200 dark:hover:border-brand-800/50">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-brand-700 dark:group-hover:text-brand-400 transition-colors">
-                    {project.title}
-                </h2>
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-brand-700 dark:group-hover:text-brand-400 transition-colors break-words">
+                        {project.title}
+                    </h2>
+                    {(onEdit || onDelete) && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                            {onEdit && (
+                                <button
+                                    onClick={() => onEdit(project)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-surface-700 transition-colors"
+                                    title={t('projects.editProject')}
+                                    aria-label={t('projects.editProject')}
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                    </svg>
+                                </button>
+                            )}
+                            {onDelete && (
+                                <button
+                                    onClick={() => onDelete(project)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    title={t('projects.deleteProject')}
+                                    aria-label={t('projects.deleteProject')}
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 <div className="relative">
                     <button
@@ -134,6 +161,10 @@ export default function ProjectCard({ project, githubLinkText, onStatusChange }:
                     )}
                 </div>
             </div>
+
+            {statusError && (
+                <p className="mb-3 text-xs font-medium text-red-500">{statusError}</p>
+            )}
 
             {project.description && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">

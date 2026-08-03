@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
 import Notification from "../UI/Notification";
@@ -16,13 +16,13 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 glass border-b border-gray-200/50 dark:border-surface-700/50">
       <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3">
-        <div className="flex justify-center gap-2 sm:gap-3">
+        <Link to="/" className="flex justify-center gap-2 sm:gap-3 rounded-xl" aria-label={t("header.logo")}>
           <img
             src="/ZZZ.png"
             alt="Flem'Art"
-            className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl"
+            className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl transition-transform duration-200 hover:scale-105"
           />
-        </div>
+        </Link>
 
         <div className="flex items-center gap-2">
           <Notification />

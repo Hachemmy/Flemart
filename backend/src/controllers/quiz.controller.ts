@@ -118,7 +118,7 @@ export async function completeQuizLevel(req: Request, res: Response) {
             return res.status(400).json({ error: 'Score must be between 0 and 10' });
         }
 
-        const passed = scoreNum >= 1;
+        const passed = scoreNum >= 7;
 
         await connection.beginTransaction();
 

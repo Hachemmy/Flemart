@@ -41,12 +41,14 @@ export default function QuizPage() {
   } | null>(null);
   const [score, setScore] = useState(0);
   const [totalAnswered, setTotalAnswered] = useState(0);
+  const [answerError, setAnswerError] = useState<string | null>(null);
 
   const fetchLanguages = useCallback(async () => {
     try {
       const res = await fetch(`${getApiUrl()}/api/quiz/languages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) return;
       const data = await res.json();
       setLanguages(data.languages || []);
     } catch {}
@@ -57,6 +59,7 @@ export default function QuizPage() {
       const res = await fetch(`${getApiUrl()}/api/quiz/progress`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) return;
       const data = await res.json();
       setProgress(data.progress || []);
     } catch {}
@@ -83,12 +86,17 @@ export default function QuizPage() {
     setLevelResult(null);
     setScore(0);
     setTotalAnswered(0);
+    setAnswerError(null);
 
     try {
       const res = await fetch(
         `${getApiUrl()}/api/quiz/${encodeURIComponent(lang)}/questions?level=${level}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
+      if (!res.ok) {
+        setQuestions([]);
+        return;
+      }
       const data = await res.json();
       setQuestions(data.questions || []);
     } catch {
@@ -100,6 +108,7 @@ export default function QuizPage() {
 
   const submitAnswer = async (answer: string) => {
     if (selectedAnswer || !questions[currentQ]) return;
+    setAnswerError(null);
     setSelectedAnswer(answer);
 
     try {
@@ -111,6 +120,7 @@ export default function QuizPage() {
         },
         body: JSON.stringify({ questionId: questions[currentQ].id, answer }),
       });
+      if (!res.ok) throw new Error(t("quiz.answerError"));
       const data = await res.json();
       const correct = data.correct;
       setIsCorrect(correct);
@@ -118,8 +128,10 @@ export default function QuizPage() {
       if (correct) setScore((prev) => prev + 1);
       setTotalAnswered((prev) => prev + 1);
     } catch {
-      setIsCorrect(false);
-      setTotalAnswered((prev) => prev + 1);
+      setIsCorrect(null);
+      setCorrectAnswer(null);
+      setSelectedAnswer(null);
+      setAnswerError(t("quiz.answerError"));
     }
   };
 
@@ -147,8 +159,13 @@ export default function QuizPage() {
           language: selectedLang,
           level: selectedLevel,
           score: score,
+          totalAnswered: totalAnswered,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to complete quiz");
+      }
       const data = await res.json();
       setLevelResult(data);
       await fetchProgress();
@@ -185,6 +202,7 @@ export default function QuizPage() {
     setLevelResult(null);
     setScore(0);
     setTotalAnswered(0);
+    setAnswerError(null);
   };
 
   const optionKeys = ["a", "b", "c", "d"];
@@ -250,8 +268,7 @@ export default function QuizPage() {
               </span>
               <span className="text-sm font-medium text-brand-600 dark:text-brand-400">
                 {score}/{totalAnswered} {t("quiz.correct")}
-              </span>
-            </div>
+              </span>            </div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
               {questions[currentQ].question}
             </h2>
@@ -280,6 +297,12 @@ export default function QuizPage() {
                 );
               })}
             </div>
+
+            {answerError && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl text-red-600 dark:text-red-400 text-sm font-medium animate-slide-down">
+                {answerError}
+              </div>
+            )}
 
             {selectedAnswer && (
               <div className="mt-6 animate-slide-up">
@@ -356,9 +379,13 @@ export default function QuizPage() {
               {t("quiz.score")} : {score}/{questions.length || 1}
             </p>
 
-            {levelResult?.passed && (
+            {levelResult?.passed ? (
               <p className="text-emerald-600 dark:text-emerald-400 font-semibold mb-6">
                 +{levelResult.xpEarned} {t("quiz.xpEarned")}
+              </p>
+            ) : (
+              <p className="text-red-600 dark:text-red-400 font-medium mb-6">
+                {t("quiz.passedMessage")}
               </p>
             )}
 

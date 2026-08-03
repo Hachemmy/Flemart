@@ -45,6 +45,7 @@ module.exports = {
                 'scale-in': 'scaleIn 0.25s ease-out',
                 'slide-in-left': 'slideInLeft 0.5s ease-out',
                 'slide-in-right': 'slideInRight 0.5s ease-out',
+                'slide-in-top': 'slideInTop 0.5s ease-out',
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                 'shimmer': 'shimmer 2s infinite linear',
                 'float': 'float 6s ease-in-out infinite',
@@ -73,6 +74,10 @@ module.exports = {
                 slideInRight: {
                     '0%': { opacity: '0', transform: 'translateX(30px)' },
                     '100%': { opacity: '1', transform: 'translateX(0)' },
+                },
+                slideInTop: {
+                    '0%': { opacity: '0', transform: 'translateY(-30px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
                 },
                 shimmer: {
                     '0%': { backgroundPosition: '-200% 0' },

@@ -13,6 +13,10 @@
         @apply antialiased;
     }
 
+    :focus-visible {
+        @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white dark:ring-offset-surface-900 rounded-md;
+    }
+
     ::-webkit-scrollbar {
         @apply w-2;
     }
@@ -31,6 +35,17 @@
 
     ::selection {
         @apply bg-brand-200 dark:bg-brand-800 text-brand-900 dark:text-brand-100;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }
 
@@ -98,13 +113,4 @@
     .scrollbar-hide::-webkit-scrollbar {
         display: none;
     }
-}
-
-@keyframes slide-down {
-    from { opacity: 0; max-height: 0; }
-    to { opacity: 1; max-height: 300px; }
-}
-
-.animate-slide-down {
-    animation: slide-down 0.2s ease-out forwards;
 }

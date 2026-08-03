@@ -68,6 +68,7 @@ export default function Learning() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: searchTerm }),
             });
+            if (!response.ok) throw new Error('search failed');
             const { results, videos } = await response.json();
             setWebResults(results || []);
             setVideoResults(videos || []);
@@ -255,7 +256,7 @@ export default function Learning() {
                                             </h3>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                                 {video.channel}
-                                                {video.views && ` · ${video.views} vues`}
+                                                {video.views && ` · ${video.views} ${t('learning.views')}`}
                                             </p>
                                         </div>
                                     </a>

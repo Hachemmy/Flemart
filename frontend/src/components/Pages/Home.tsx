@@ -46,6 +46,7 @@ export default function Home() {
       const res = await fetch(`${API_URL}/api/feed`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error("feed error");
       const data = await res.json();
       setProjects(data.projects || []);
       setFeedError(null);

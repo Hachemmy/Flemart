@@ -9,7 +9,7 @@ const translations: Record<Lang, Translations> = { fr, en };
 
 interface I18nContextType {
     lang: Lang;
-    t: (key: string) => string;
+    t: (key: string, params?: Record<string, string | number>) => string;
     setLang: (lang: Lang) => void;
 }
 
@@ -25,8 +25,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('language', newLang);
     };
 
-    const t = (key: string): string => {
-        return translations[lang][key] || translations['fr'][key] || key;
+    const t = (key: string, params?: Record<string, string | number>): string => {
+        let text = translations[lang][key] || translations['fr'][key] || key;
+        if (params) {
+            Object.entries(params).forEach(([k, v]) => {
+                text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+            });
+        }
+        return text;
     };
 
     useEffect(() => {

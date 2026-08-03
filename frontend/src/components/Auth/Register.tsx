@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
 import { getApiUrl } from "../../config/api";
+import ThemeToggle from "../UI/ThemeToggle";
+import LanguageToggle from "../UI/LanguageToggle";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -48,6 +50,12 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-surface-900 p-5">
+      {/* Toggles */}
+      <div className="fixed top-4 right-4 flex items-center gap-2 z-50">
+        <LanguageToggle />
+        <ThemeToggle />
+      </div>
+
       <div className="flex w-full max-w-[960px] bg-white dark:bg-surface-800 rounded-[24px] shadow-card overflow-hidden animate-scale-in">
         {/* Left - Brand */}
         <div className="hidden lg:flex lg:w-[420px] bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 relative overflow-hidden flex-col justify-center p-10">
@@ -177,15 +185,16 @@ export default function Register() {
                 style={{ animationDelay: "0.3s", animationFillMode: "both" }}
               >
                 <div className="flex h-[72px] flex-col justify-center rounded-xl border border-gray-200 dark:border-surface-700 px-4 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all duration-200">
-                  <label className="text-gray-500 dark:text-gray-400 text-sm">
+                  <label htmlFor="register-username" className="text-gray-500 dark:text-gray-400 text-sm">
                     {t("auth.username")}
                   </label>
                   <input
+                    id="register-username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full border-none shadow-none p-0 text-gray-900 dark:text-white bg-transparent outline-none text-sm mt-0.5 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    placeholder="username"
+                    placeholder={t("auth.usernamePlaceholder")}
                     required
                   />
                 </div>
@@ -196,15 +205,16 @@ export default function Register() {
                 style={{ animationDelay: "0.4s", animationFillMode: "both" }}
               >
                 <div className="flex h-[72px] flex-col justify-center rounded-xl border border-gray-200 dark:border-surface-700 px-4 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all duration-200">
-                  <label className="text-gray-500 dark:text-gray-400 text-sm">
+                  <label htmlFor="register-email" className="text-gray-500 dark:text-gray-400 text-sm">
                     {t("auth.email")}
                   </label>
                   <input
+                    id="register-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full border-none shadow-none p-0 text-gray-900 dark:text-white bg-transparent outline-none text-sm mt-0.5 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    placeholder="votre@email.com"
+                    placeholder={t("auth.emailPlaceholder")}
                     required
                   />
                 </div>
@@ -215,15 +225,16 @@ export default function Register() {
                 style={{ animationDelay: "0.5s", animationFillMode: "both" }}
               >
                 <div className="flex h-[72px] flex-col justify-center rounded-xl border border-gray-200 dark:border-surface-700 px-4 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all duration-200">
-                  <label className="text-gray-500 dark:text-gray-400 text-sm">
+                  <label htmlFor="register-password" className="text-gray-500 dark:text-gray-400 text-sm">
                     {t("auth.password")}
                   </label>
                   <input
+                    id="register-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full border-none shadow-none p-0 text-gray-900 dark:text-white bg-transparent outline-none text-sm mt-0.5 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    placeholder="••••••••"
+                    placeholder={t("auth.passwordPlaceholder")}
                     required
                   />
                 </div>
@@ -234,15 +245,16 @@ export default function Register() {
                 style={{ animationDelay: "0.6s", animationFillMode: "both" }}
               >
                 <div className="flex h-[72px] flex-col justify-center rounded-xl border border-gray-200 dark:border-surface-700 px-4 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all duration-200">
-                  <label className="text-gray-500 dark:text-gray-400 text-sm">
+                  <label htmlFor="register-confirm" className="text-gray-500 dark:text-gray-400 text-sm">
                     {t("auth.confirmPassword")}
                   </label>
                   <input
+                    id="register-confirm"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full border-none shadow-none p-0 text-gray-900 dark:text-white bg-transparent outline-none text-sm mt-0.5 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    placeholder="••••••••"
+                    placeholder={t("auth.passwordPlaceholder")}
                     required
                   />
                 </div>
@@ -290,7 +302,7 @@ export default function Register() {
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-4 bg-white dark:bg-surface-800 text-gray-400 uppercase tracking-wider text-xs font-medium">
-                  ou
+                  {t("auth.or")}
                 </span>
               </div>
             </div>

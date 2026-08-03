@@ -36,6 +36,7 @@ export async function sendMessage(req: Request, res: Response) {
             conversationManager.addMessage(userId, {
                 role: 'assistant',
                 content: assistantMessage.content ?? '',
+                tool_calls: toolCallsRaw,
             });
 
             const toolCalls = toolCallsRaw.filter(
@@ -57,7 +58,6 @@ export async function sendMessage(req: Request, res: Response) {
                     role: 'tool' as const,
                     content: result,
                     tool_call_id: toolCall.id,
-                    name: fnName,
                 });
             }
 

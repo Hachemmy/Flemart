@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
-import { getApiUrl } from "../../config/api";
+import { getApiUrl, authorizedFetch } from "../../config/api";
 import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
@@ -148,28 +148,24 @@ export default function ChatWidget() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/chat`, {
+      const response = await authorizedFetch(`${getApiUrl()}/api/chat`, token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || "Unknown error");
+        throw new Error(data.error || t("chat.error"));
       }
 
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.reply },
       ]);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(msg);
+    } catch {
+      setError(t("chat.error"));
     } finally {
       setIsLoading(false);
     }
@@ -177,9 +173,8 @@ export default function ChatWidget() {
 
   const clearChat = async () => {
     try {
-      await fetch(`${getApiUrl()}/api/chat`, {
+      await authorizedFetch(`${getApiUrl()}/api/chat`, token, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
     } catch {
       // silent — UI already cleared
@@ -204,7 +199,7 @@ export default function ChatWidget() {
       {/* FAB */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed md:bottom-15 bottom-20 right-6 z-50 w-14 h-14 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-float flex items-center justify-center transition-all duration-200 hover:scale-105"
+        className="fixed bottom-20 md:bottom-24 right-6 z-50 w-14 h-14 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-float flex items-center justify-center transition-all duration-200 hover:scale-105"
         aria-label={t("chat.title")}
       >
         {isOpen ? (
@@ -216,20 +211,30 @@ export default function ChatWidget() {
 
       {/* Panel */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] h-[500px] max-h-[calc(100vh-8rem)] rounded-2xl bg-white dark:bg-surface-800 border border-gray-200 dark:border-surface-700 shadow-float flex flex-col overflow-hidden fade-in">
+        <div className="fixed bottom-24 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] h-[500px] max-h-[calc(100vh-8rem)] rounded-2xl bg-white dark:bg-surface-800 border border-gray-200 dark:border-surface-700 shadow-float flex flex-col overflow-hidden animate-scale-in">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-surface-700 bg-brand-50 dark:bg-surface-900">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {t("chat.title")}
             </h3>
-            <button
-              onClick={clearChat}
-              className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-surface-700 transition-colors"
-              aria-label={t("chat.newChat")}
-              title={t("chat.newChat")}
-            >
-              <TrashIcon className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={clearChat}
+                className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-surface-700 transition-colors"
+                aria-label={t("chat.newChat")}
+                title={t("chat.newChat")}
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-surface-700 transition-colors"
+                aria-label={t("chat.close")}
+                title={t("chat.close")}
+              >
+                <XMarkIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Messages */}
@@ -286,8 +291,7 @@ export default function ChatWidget() {
 
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 text-sm text-red-600 dark:text-red-400">
-                {t("chat.error")}
-                <span className="block text-xs mt-1 opacity-70">{error}</span>
+                {error}
               </div>
             )}
 

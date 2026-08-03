@@ -14,32 +14,35 @@ interface NotificationItem {
   actor_photo: string | null;
 }
 
-const typeConfig: Record<string, { color: string; bg: string; label: string }> =
+const typeConfig: Record<string, { color: string; bg: string; labelKey: string }> =
   {
     activity: {
       color: "text-blue-500",
       bg: "bg-blue-100 dark:bg-blue-900/30",
-      label: "Activite",
+      labelKey: "notification.typeActivity",
     },
     motivation: {
       color: "text-green-500",
       bg: "bg-green-100 dark:bg-green-900/30",
-      label: "Encouragement",
+      labelKey: "notification.typeMotivation",
     },
   };
 
-function timeAgo(timestamp: number): string {
+function timeAgo(
+  timestamp: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = now - timestamp;
-  if (diff < 60) return "a l'instant";
-  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`;
-  if (diff < 604800) return `il y a ${Math.floor(diff / 86400)}j`;
-  return `il y a ${Math.floor(diff / 604800)}sem`;
+  if (diff < 60) return t("notification.justNow");
+  if (diff < 3600) return t("notification.minutesAgo", { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t("notification.hoursAgo", { n: Math.floor(diff / 3600) });
+  if (diff < 604800) return t("notification.daysAgo", { n: Math.floor(diff / 86400) });
+  return t("notification.weeksAgo", { n: Math.floor(diff / 604800) });
 }
 
 export default function Notification() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { token } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,30 +61,17 @@ export default function Notification() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
-        let detail = "";
-        try {
-          const body = await response.json();
-          detail = body?.error || "";
-        } catch {
-          /* response wasn't JSON */
-        }
-        throw new Error(
-          detail
-            ? `Erreur (${response.status}) : ${detail}`
-            : `Erreur (${response.status})`,
-        );
+        throw new Error(t("notification.errorLoad"));
       }
       const data = await response.json();
       setNotifications(data.notifications || []);
       setError(null);
-    } catch (err: any) {
-      setError(
-        err.message || "Erreur réseau : impossible de contacter le serveur",
-      );
+    } catch {
+      setError(t("notification.errorNetwork"));
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   useEffect(() => {
     fetchNotifications();
@@ -202,7 +192,7 @@ export default function Notification() {
                       onClick={markAllRead}
                       className="text-xs sm:text-sm text-brand-600 dark:text-brand-400 hover:underline font-medium"
                     >
-                      Tout marquer lu
+                      {t("notification.markAllRead")}
                     </button>
                   )}
                   <button
@@ -278,7 +268,7 @@ export default function Notification() {
                   const config = typeConfig[notif.type] || {
                     color: "text-gray-500",
                     bg: "bg-gray-100",
-                    label: notif.type,
+                    labelKey: `notification.type${notif.type}`,
                   };
                   const isExpanded = expandedId === notif.id;
                   return (
@@ -322,10 +312,10 @@ export default function Notification() {
                             <span
                               className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${config.color}`}
                             >
-                              {config.label}
+                              {t(config.labelKey)}
                             </span>
                             <span className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">
-                              {timeAgo(notif.created_timestamp)}
+                              {timeAgo(notif.created_timestamp, t)}
                             </span>
                           </div>
                           <p
@@ -369,7 +359,7 @@ export default function Notification() {
                                 <span className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">
                                   {new Date(
                                     notif.created_timestamp * 1000,
-                                  ).toLocaleString("fr-FR")}
+                                  ).toLocaleString(lang === "fr" ? "fr-FR" : "en-GB")}
                                 </span>
                                 {notif.actor_username && (
                                   <span className="text-[10px] sm:text-xs text-brand-600 dark:text-brand-400 font-medium">
