@@ -8,7 +8,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 let token: string;
 let userId: number;
 let otherUserId: number;
-let otherToken: string;
 let projectId: number;
 
 beforeAll(async () => {
@@ -30,7 +29,6 @@ beforeAll(async () => {
         ['feed-other@example.com', hashedPassword, 'feed-otheruser']
     );
     otherUserId = (result2 as any).insertId;
-    otherToken = jwt.sign({ id: otherUserId, email: 'feed-other@example.com', username: 'feed-otheruser' }, JWT_SECRET, { expiresIn: '1h' });
 });
 
 afterAll(async () => {

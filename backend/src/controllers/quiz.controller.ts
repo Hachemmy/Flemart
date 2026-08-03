@@ -127,7 +127,7 @@ export async function completeQuizLevel(req: Request, res: Response) {
             [userId, language]
         );
 
-        let progress = (existing as any[])[0];
+        const progress = (existing as any[])[0];
 
         if (!progress) {
             if (passed) {

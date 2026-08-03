@@ -94,7 +94,7 @@ describe('Register Component', () => {
     it('should display an error message on failed registration', async () => {
         (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
             ok: false,
-            json: () => Promise.resolve({ message: 'Cet email est déjà utilisé.' }),
+            json: () => Promise.resolve({ error: 'Cet email est déjà utilisé.' }),
         });
 
         renderWithProviders(<Register />);

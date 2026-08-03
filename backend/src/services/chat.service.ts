@@ -1,5 +1,3 @@
-import type OpenAI from 'openai';
-
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: string;

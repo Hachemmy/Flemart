@@ -40,7 +40,7 @@ async function checkInactiveProjects() {
             SELECT p.id, p.title, p.user_id
             FROM Projects p
             WHERE p.status = 'in_progress'
-            AND p.updated_at <= DATE_SUB(NOW(), INTERVAL 48 HOUR)
+            AND p.updated_at <= DATE_SUB(NOW(), INTERVAL ${INACTIVE_HOURS} HOUR)
             AND NOT EXISTS (
                 SELECT 1 FROM Notifications n
                 WHERE n.user_id = p.user_id

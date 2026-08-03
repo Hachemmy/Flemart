@@ -5,8 +5,6 @@ import crypto from 'crypto';
 import pool from '../config/database';
 import { z } from 'zod';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
-
 // Pending GitHub link states: state -> { userId, expiresAt }
 const pendingGithubLinks = new Map<string, { userId: number; expiresAt: number }>();
 
@@ -211,6 +209,9 @@ export async function updateProfile(req: Request, res: Response) {
 
 export function githubAuth(req: Request, res: Response) {
     const clientId = process.env.GITHUB_CLIENT_ID;
+    if (!clientId) {
+        return res.status(500).json({ error: 'GitHub client ID is not configured' });
+    }
     const redirectUri = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/github/callback`;
     const scope = 'read:user user:email';
     const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&login=`;
@@ -270,7 +271,7 @@ export async function githubCallback(req: Request, res: Response) {
                 Accept: 'application/vnd.github.v3+json',
             },
         });
-        const githubUser = (await userResponse.json()) as { id: number; login: string; email: string; avatar_url: string };
+        const githubUser = (await userResponse.json()) as { id: number; login: string; email?: string; avatar_url: string };
 
         const emailResponse = await fetch('https://api.github.com/user/emails', {
             headers: {
@@ -280,6 +281,7 @@ export async function githubCallback(req: Request, res: Response) {
         });
         const emails = (await emailResponse.json()) as { email: string; primary: boolean }[];
         const primaryEmail = emails.find((e) => e.primary)?.email || githubUser.email;
+        const emailToUse = primaryEmail || `${githubUser.login || 'github_user'}@users.noreply.github.com`;
 
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
@@ -315,7 +317,7 @@ export async function githubCallback(req: Request, res: Response) {
         // Normal login/register flow
         const [existingUsers] = await pool.execute(
             'SELECT * FROM Users WHERE github_id = ? OR email = ?',
-            [String(githubUser.id), primaryEmail]
+            [String(githubUser.id), emailToUse]
         );
         const existingUser = (existingUsers as any[])[0];
 
@@ -342,18 +344,18 @@ export async function githubCallback(req: Request, res: Response) {
             username = githubUser.login;
             const [result] = await pool.execute(
                 'INSERT INTO Users (email, password, username, github_id, photo, github_token) VALUES (?, ?, ?, ?, ?, ?)',
-                [primaryEmail, await bcrypt.hash(Math.random().toString(36), 10), username, String(githubUser.id), githubUser.avatar_url, tokenData.access_token]
+                [emailToUse, await bcrypt.hash(Math.random().toString(36), 10), username, String(githubUser.id), githubUser.avatar_url, tokenData.access_token]
             );
             userId = (result as any).insertId;
         }
 
         const jwtToken = jwt.sign(
-            { id: userId, email: primaryEmail, username },
+            { id: userId, email: emailToUse, username },
             process.env.JWT_SECRET || 'your_jwt_secret_key_here',
             { expiresIn: '7d' }
         );
 
-        res.redirect(`${frontendUrl}/login?token=${jwtToken}&user=${encodeURIComponent(JSON.stringify({ id: userId, email: primaryEmail, username, photo: githubUser.avatar_url }))}`);
+        res.redirect(`${frontendUrl}/login?token=${jwtToken}&user=${encodeURIComponent(JSON.stringify({ id: userId, email: emailToUse, username, photo: githubUser.avatar_url }))}`);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }

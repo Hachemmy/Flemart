@@ -38,6 +38,12 @@ export default function Projects() {
 
     useEffect(() => {
         const fetchProjects = async () => {
+            if (!token) {
+                setError(t('auth.genericError'));
+                setLoading(false);
+                return;
+            }
+
             try {
                 const response = await fetch(`${getApiUrl()}/api/projects`, {
                     headers: { Authorization: `Bearer ${token}` },
@@ -56,14 +62,17 @@ export default function Projects() {
             }
         };
         fetchProjects();
-    }, [token]);
+    }, [token, t]);
 
     const fetchRepos = async () => {
-        if (!token) return;
+        if (!token) {
+            setError(t('auth.genericError'));
+            return;
+        }
         setReposLoading(true);
         try {
             const response = await fetch(`${getApiUrl()}/api/projects/github/repos`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` }
             });
             if (!response.ok) throw new Error(t('auth.genericError'));
             const { repos: githubRepos } = await response.json();
@@ -98,12 +107,12 @@ export default function Projects() {
                     status
                 })
             });
+            const data = await response.json();
             if (!response.ok) {
-                const data = await response.json();
                 throw new Error(data.error || t('auth.genericError'));
             }
             const newProject: Project = {
-                id: (await response.json()).projectId,
+                id: data.projectId,
                 title: repo.name,
                 description: repo.description || '',
                 githubLink: repo.html_url,
@@ -152,21 +161,19 @@ export default function Projects() {
             <div className="flex gap-2 p-1 bg-gray-100 dark:bg-surface-800 rounded-xl">
                 <button
                     onClick={() => setTab('saved')}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                        tab === 'saved'
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${tab === 'saved'
                             ? 'bg-white dark:bg-surface-700 text-brand-700 dark:text-brand-400 shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
+                        }`}
                 >
                     {t('projects.myProjects')} ({projects.length})
                 </button>
                 <button
                     onClick={() => setTab('github')}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                        tab === 'github'
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${tab === 'github'
                             ? 'bg-white dark:bg-surface-700 text-brand-700 dark:text-brand-400 shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
+                        }`}
                 >
                     <span className="flex items-center justify-center gap-2">
                         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
@@ -185,18 +192,16 @@ export default function Projects() {
                                 <button
                                     key={sf.value}
                                     onClick={() => setFilter(sf.value)}
-                                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                                        filter === sf.value
+                                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${filter === sf.value
                                             ? 'bg-brand-600 text-white shadow-glow'
                                             : 'bg-white dark:bg-surface-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-surface-700 hover:border-brand-300 dark:hover:border-brand-700'
-                                    }`}
+                                        }`}
                                 >
                                     {sf.label}
-                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-xs ${
-                                        filter === sf.value
+                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-xs ${filter === sf.value
                                             ? 'bg-white/20 text-white'
                                             : 'bg-gray-100 dark:bg-surface-700 text-gray-500 dark:text-gray-400'
-                                    }`}>
+                                        }`}>
                                         {sf.count}
                                     </span>
                                 </button>
@@ -345,11 +350,10 @@ export default function Projects() {
                                                     key={opt.value}
                                                     onClick={() => importRepo(repo, opt.value)}
                                                     disabled={importing === repo.id}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 disabled:opacity-50 ${
-                                                        importing === repo.id
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 disabled:opacity-50 ${importing === repo.id
                                                             ? 'bg-gray-100 dark:bg-surface-700 text-gray-400'
                                                             : opt.color
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {importing === repo.id ? '...' : opt.label}
                                                 </button>

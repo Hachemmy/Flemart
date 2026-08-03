@@ -37,6 +37,7 @@ export default function Home() {
   const [expandedReadme, setExpandedReadme] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!token) return;
     fetchFeed();
   }, [token]);
 
@@ -69,10 +70,10 @@ export default function Home() {
       prev.map((p) =>
         p.id === projectId
           ? {
-              ...p,
-              user_liked: !previousLiked,
-              like_count: previousLiked ? previousCount - 1 : previousCount + 1,
-            }
+            ...p,
+            user_liked: !previousLiked,
+            like_count: previousLiked ? previousCount - 1 : previousCount + 1,
+          }
           : p,
       ),
     );
@@ -97,10 +98,10 @@ export default function Home() {
         prev.map((p) =>
           p.id === projectId
             ? {
-                ...p,
-                user_liked: data.liked,
-                like_count: data.liked ? previousCount + 1 : previousCount - 1,
-              }
+              ...p,
+              user_liked: data.liked,
+              like_count: data.liked ? previousCount + 1 : previousCount - 1,
+            }
             : p,
         ),
       );
@@ -293,11 +294,10 @@ export default function Home() {
                 <button
                   onClick={() => toggleLike(project.id)}
                   disabled={actionLoading === project.id}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    project.user_liked
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${project.user_liked
                       ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
                       : "bg-white dark:bg-surface-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-700 border border-gray-200 dark:border-surface-600"
-                  }`}
+                    }`}
                 >
                   {project.user_liked ? (
                     <HeartIconSolid className="h-4 w-4" />

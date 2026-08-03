@@ -30,6 +30,7 @@ export default function QuizPage() {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [quizComplete, setQuizComplete] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -76,6 +77,7 @@ export default function QuizPage() {
     setLoading(true);
     setCurrentQ(0);
     setSelectedAnswer(null);
+    setCorrectAnswer(null);
     setIsCorrect(null);
     setQuizComplete(false);
     setLevelResult(null);
@@ -112,6 +114,7 @@ export default function QuizPage() {
       const data = await res.json();
       const correct = data.correct;
       setIsCorrect(correct);
+      setCorrectAnswer(data.correctAnswer || null);
       if (correct) setScore((prev) => prev + 1);
       setTotalAnswered((prev) => prev + 1);
     } catch {
@@ -124,6 +127,7 @@ export default function QuizPage() {
     if (currentQ < questions.length - 1) {
       setCurrentQ((prev) => prev + 1);
       setSelectedAnswer(null);
+      setCorrectAnswer(null);
       setIsCorrect(null);
     } else {
       finishQuiz();
@@ -160,7 +164,7 @@ export default function QuizPage() {
   const getOptionClass = (key: string) => {
     if (!selectedAnswer)
       return "border-gray-200 dark:border-surface-700 hover:border-brand-300 dark:hover:border-brand-700 hover:bg-brand-50/50 dark:hover:bg-brand-900/10 cursor-pointer";
-    const correctKey = questions[currentQ]?.correct_answer;
+    const correctKey = correctAnswer;
     if (key === correctKey)
       return "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-600";
     if (key === selectedAnswer && !isCorrect)
@@ -175,6 +179,7 @@ export default function QuizPage() {
     setQuestions([]);
     setCurrentQ(0);
     setSelectedAnswer(null);
+    setCorrectAnswer(null);
     setIsCorrect(null);
     setQuizComplete(false);
     setLevelResult(null);

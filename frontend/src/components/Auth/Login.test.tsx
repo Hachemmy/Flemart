@@ -73,7 +73,7 @@ describe('Login Component', () => {
     it('should display an error message on failed login', async () => {
         (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
             ok: false,
-            json: () => Promise.resolve({ message: 'Identifiants invalides' }),
+            json: () => Promise.resolve({ error: 'Identifiants invalides' }),
         });
 
         renderWithProviders(<Login />);

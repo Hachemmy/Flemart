@@ -4,7 +4,7 @@ import {
     getLearningResourceById,
     searchSolution
 } from '../controllers/learning.controller';
-import { authenticateToken } from '../middlewares/auth.middleware';
+
 
 const router = Router();
 

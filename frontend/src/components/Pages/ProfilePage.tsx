@@ -37,6 +37,8 @@ export default function ProfilePage() {
       window.history.replaceState({}, "", "/profile");
     }
 
+    if (!token) return;
+
     fetch(`${getApiUrl()}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -44,7 +46,7 @@ export default function ProfilePage() {
       .then((data) => {
         if (data.user && token) login(data.user, token);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [token, login]);
 
   const githubLinked = !!user?.github_id;
@@ -121,11 +123,10 @@ export default function ProfilePage() {
 
       {message && (
         <div
-          className={`p-4 rounded-xl text-sm font-medium animate-slide-down ${
-            message.type === "success"
+          className={`p-4 rounded-xl text-sm font-medium animate-slide-down ${message.type === "success"
               ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 text-green-700 dark:text-green-400"
               : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 text-red-600 dark:text-red-400"
-          }`}
+            }`}
         >
           {message.text}
         </div>
