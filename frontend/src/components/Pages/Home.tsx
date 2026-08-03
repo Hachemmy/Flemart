@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
+import { useToast } from "../../hooks/useToast";
 import { getApiUrl } from "../../config/api";
 import {
   HeartIcon,
   ArrowUpRightIcon,
   PlayIcon,
-  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 
@@ -30,6 +30,7 @@ interface FeedProject {
 export default function Home() {
   const { token } = useAuth();
   const { t } = useI18n();
+  const toast = useToast();
   const [projects, setProjects] = useState<FeedProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
@@ -131,7 +132,7 @@ export default function Home() {
         setProjects((prev) => prev.filter((p) => p.id !== projectId));
       } else {
         const data = await res.json();
-        alert(data.error);
+        toast.error(data.error || t("home.resumeError"));
       }
     } finally {
       setActionLoading(null);
@@ -167,10 +168,28 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <div className="flex items-center gap-3 text-gray-500">
-          <ArrowPathIcon className="h-5 w-5 animate-spin" />
-          <span>{t("home.loading")}</span>
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8 mb-24">
+        <div className="mb-6 sm:mb-8">
+          <div className="skeleton h-8 w-40 mb-2" />
+          <div className="skeleton h-4 w-64" />
+        </div>
+        <div className="space-y-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="card p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="skeleton w-9 h-9 rounded-full" />
+                <div className="space-y-2 flex-1">
+                  <div className="skeleton h-4 w-32" />
+                  <div className="skeleton h-3 w-20" />
+                </div>
+                <div className="skeleton h-5 w-16 rounded-full" />
+              </div>
+              <div className="skeleton h-5 w-3/4 mb-3" />
+              <div className="skeleton h-4 w-full mb-2" />
+              <div className="skeleton h-4 w-2/3 mb-4" />
+              <div className="skeleton h-8 w-24 rounded-full" />
+            </div>
+          ))}
         </div>
       </div>
     );

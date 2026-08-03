@@ -48,6 +48,7 @@
   "home.feedError": "Could not load the feed. Check your connection.",
   "home.loading": "Loading...",
   "home.resume": "Resume",
+  "home.resumeError": "Could not resume this project.",
   "home.liked": "Liked",
   "home.by": "by",
   "home.readme": "README",
@@ -72,6 +73,10 @@
   "landing.ctaTitle": "Ready to start your journey?",
   "landing.ctaSubtitle": "Create your free account and join the Flem'Art developer community.",
   "landing.ctaButton": "Create account",
+
+  "notFound.title": "Page not found",
+  "notFound.subtitle": "The page you're looking for doesn't exist or has been moved.",
+  "notFound.home": "Back to home",
 
   "projects.title": "Projects",
   "projects.subtitle": "Your projects and GitHub repositories.",

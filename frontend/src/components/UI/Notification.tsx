@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
+import { useConfirm } from "../../hooks/useConfirm";
 import { getApiUrl } from "../../config/api";
 
 interface NotificationItem {
@@ -44,6 +45,7 @@ function timeAgo(
 export default function Notification() {
   const { t, lang } = useI18n();
   const { token } = useAuth();
+  const { confirm } = useConfirm();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
@@ -120,7 +122,13 @@ export default function Notification() {
   }
 
   async function deleteNotification(id: number) {
-    if (!window.confirm(t("notification.confirmDelete"))) return;
+    const ok = await confirm({
+      title: t("notification.title"),
+      message: t("notification.confirmDelete"),
+      confirmLabel: t("notification.confirmDelete"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await fetch(`${getApiUrl()}/api/notifications/${id}`, {
         method: "DELETE",

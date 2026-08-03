@@ -133,7 +133,13 @@ export default function Header() {
 
           <div className="w-px h-6 bg-gray-200 dark:bg-surface-700 mx-1" />
 
-          <Profile user={user} onLogout={logout} />
+          <Profile
+            user={user}
+            onLogout={() => {
+              logout();
+              navigate("/login");
+            }}
+          />
         </div>
       </div>
     </header>

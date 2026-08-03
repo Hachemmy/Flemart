@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import Login from "./components/Auth/Login";
 import Register from "./components/Auth/Register";
@@ -8,9 +8,11 @@ import Projects from "./components/Pages/Projects";
 import ProfilePage from "./components/Pages/ProfilePage";
 import QuizPage from "./components/Pages/QuizPage";
 import Landing from "./components/Pages/Landing";
+import NotFound from "./components/Pages/NotFound";
 import Header from "./components/Layout/Header";
 import Footer from "./components/Layout/Footer";
 import ChatWidget from "./components/UI/ChatWidget";
+import ScrollToTop from "./components/UI/ScrollToTop";
 
 function App() {
   const { user, isRestoring } = useAuth();
@@ -28,6 +30,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-surface-900 text-gray-900 dark:text-gray-100">
+      <ScrollToTop />
       {user ? (
         <>
           <Header />
@@ -39,7 +42,7 @@ function App() {
                 <Route path="/projects" element={<Projects />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/quiz" element={<QuizPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
           </main>
@@ -51,7 +54,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       )}
     </div>

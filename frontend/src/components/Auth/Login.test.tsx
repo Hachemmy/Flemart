@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nProvider } from '../../i18n';
+import { ThemeProvider } from '../../hooks/useTheme';
 import Login from './Login';
 
 const mockLogin = vi.fn();
@@ -24,7 +25,9 @@ vi.mock('react-router-dom', async () => {
 function renderWithProviders(ui: React.ReactElement) {
     return render(
         <BrowserRouter>
-            <I18nProvider>{ui}</I18nProvider>
+            <ThemeProvider>
+                <I18nProvider>{ui}</I18nProvider>
+            </ThemeProvider>
         </BrowserRouter>
     );
 }

@@ -48,6 +48,7 @@
   "home.feedError": "Impossible de charger le fil d'actus. Vérifiez votre connexion.",
   "home.loading": "Chargement...",
   "home.resume": "Reprendre",
+  "home.resumeError": "Impossible de reprendre ce projet.",
   "home.liked": "Aimé",
   "home.by": "par",
   "home.readme": "README",
@@ -72,6 +73,10 @@
   "landing.ctaTitle": "Prêt à commencer votre aventure ?",
   "landing.ctaSubtitle": "Créez votre compte gratuitement et rejoignez la communauté des développeurs Flem'Art.",
   "landing.ctaButton": "Créer un compte",
+
+  "notFound.title": "Page introuvable",
+  "notFound.subtitle": "La page que vous cherchez n'existe pas ou a été déplacée.",
+  "notFound.home": "Retour à l'accueil",
 
   "projects.title": "Projets",
   "projects.subtitle": "Vos projets et vos repositories GitHub.",

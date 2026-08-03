@@ -1,6 +1,8 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useI18n } from '../../i18n';
+import { useToast } from '../../hooks/useToast';
+import { useConfirm } from '../../hooks/useConfirm';
 import { getApiUrl, authorizedFetch } from '../../config/api';
 import ProjectCard from '../UI/ProjectCard';
 
@@ -57,7 +59,8 @@ export default function Projects() {
     const [form, setForm] = useState<ProjectForm>(emptyForm);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
-    const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const toast = useToast();
+    const { confirm } = useConfirm();
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -137,9 +140,9 @@ export default function Projects() {
             };
             setProjects(prev => [newProject, ...prev]);
             setRepos(prev => prev.filter(r => r.id !== repo.id));
-            setToast({ type: 'success', text: t('projects.created') });
+            toast.success(t('projects.created'));
         } catch (err: any) {
-            setToast({ type: 'error', text: err.message || t('projects.saveError') });
+            toast.error(err.message || t('projects.saveError'));
         } finally {
             setImporting(null);
         }
@@ -214,7 +217,7 @@ export default function Projects() {
                             : p
                     )
                 );
-                setToast({ type: 'success', text: t('projects.updated') });
+                toast.success(t('projects.updated'));
             } else {
                 const newProject: Project = {
                     id: data.projectId,
@@ -225,7 +228,7 @@ export default function Projects() {
                     status: body.status,
                 };
                 setProjects(prev => [newProject, ...prev]);
-                setToast({ type: 'success', text: t('projects.created') });
+                toast.success(t('projects.created'));
             }
             setModalOpen(false);
         } catch (err: any) {
@@ -237,7 +240,13 @@ export default function Projects() {
 
     const handleDelete = async (project: Project) => {
         if (!token) return;
-        if (!window.confirm(t('projects.deleteConfirm'))) return;
+        const ok = await confirm({
+            title: t('projects.deleteProject'),
+            message: t('projects.deleteConfirm'),
+            confirmLabel: t('projects.deleteProject'),
+            danger: true,
+        });
+        if (!ok) return;
         try {
             const response = await authorizedFetch(`${getApiUrl()}/api/projects/${project.id}`, token, {
                 method: 'DELETE',
@@ -247,9 +256,9 @@ export default function Projects() {
                 throw new Error(data.error || t('projects.saveError'));
             }
             setProjects(prev => prev.filter(p => p.id !== project.id));
-            setToast({ type: 'success', text: t('projects.deleted') });
+            toast.success(t('projects.deleted'));
         } catch (err: any) {
-            setToast({ type: 'error', text: err.message || t('projects.saveError') });
+            toast.error(err.message || t('projects.saveError'));
         }
     };
 
@@ -266,9 +275,9 @@ export default function Projects() {
     ];
 
     const statusOptions = [
-        { value: 'in_progress', label: t('projects.enCours'), color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-        { value: 'success', label: t('projects.reussi'), color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-        { value: 'archived', label: t('projects.classe'), color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+        { value: 'in_progress', label: t('projects.enCours'), color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+        { value: 'success', label: t('projects.reussi'), color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+        { value: 'archived', label: t('projects.classe'), color: 'bg-gray-100 text-gray-600 dark:bg-gray-800/30 dark:text-gray-400' },
         { value: 'abandoned', label: t('projects.abandonne'), color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
     ];
 
@@ -511,16 +520,6 @@ export default function Projects() {
                         </div>
                     )}
                 </>
-            )}
-
-            {toast && (
-                <div className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-slide-up ${toast.type === 'success'
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-red-600 text-white'
-                    }`}>
-                    {toast.text}
-                    <button onClick={() => setToast(null)} className="ml-2 underline">OK</button>
-                </div>
             )}
 
             {error && (

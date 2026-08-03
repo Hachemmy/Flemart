@@ -4,6 +4,8 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { ThemeProvider } from "./hooks/useTheme";
 import { I18nProvider } from "./i18n";
+import { ToastProvider } from "./hooks/useToast";
+import { ConfirmProvider } from "./hooks/useConfirm";
 import App from "./App";
 import "./index.css";
 
@@ -13,7 +15,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <ThemeProvider>
         <I18nProvider>
           <AuthProvider>
-            <App />
+            <ToastProvider>
+              <ConfirmProvider>
+                <App />
+              </ConfirmProvider>
+            </ToastProvider>
           </AuthProvider>
         </I18nProvider>
       </ThemeProvider>
