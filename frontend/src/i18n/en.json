@@ -197,7 +197,7 @@
   "quiz.score": "Score",
   "quiz.passed": "Level passed!",
   "quiz.failed": "Not enough...",
-  "quiz.passedMessage": "You need 7/10 to pass",
+  "quiz.passedMessage": "You need 70% correct answers to pass",
   "quiz.xpEarned": "XP earned!",
   "quiz.retry": "Retry",
   "quiz.nextLevel": "Next Level",
@@ -214,6 +214,7 @@
   "quiz.answerError": "Error submitting your answer. Try again.",
   "quiz.keepTrying": "Keep practicing to pass this level.",
   "quiz.totalAnswered": "answered",
+  "quiz.levelLocked": "Complete the previous level to unlock this level.",
 
   "chat.title": "Flem'Art Assistant",
   "chat.placeholder": "Ask a question...",

@@ -197,7 +197,7 @@
   "quiz.score": "Score",
   "quiz.passed": "Niveau réussi !",
   "quiz.failed": "Pas assez...",
-  "quiz.passedMessage": "Il faut 7/10 pour réussir",
+  "quiz.passedMessage": "Il faut 70 % de bonnes réponses pour réussir",
   "quiz.xpEarned": "XP gagnés !",
   "quiz.retry": "Recommencer",
   "quiz.nextLevel": "Niveau suivant",
@@ -214,6 +214,7 @@
   "quiz.answerError": "Erreur lors de l'envoi de la réponse. Réessayez.",
   "quiz.keepTrying": "Continuez à vous entraîner pour réussir ce niveau.",
   "quiz.totalAnswered": "répondues",
+  "quiz.levelLocked": "Terminez le niveau précédent pour débloquer ce niveau.",
 
   "chat.title": "Assistant Flem'Art",
   "chat.placeholder": "Posez une question...",
