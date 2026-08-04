@@ -122,7 +122,7 @@ describe('Quiz Controller', () => {
             const res = await request(app)
                 .post('/api/quiz/complete')
                 .set('Authorization', `Bearer ${token}`)
-                .send({ language: 'JavaScript', level: 1, score: 8 });
+                .send({ language: 'JavaScript', level: 1, score: 8, totalAnswered: 10 });
 
             expect(res.status).toBe(200);
             expect(res.body).toHaveProperty('passed');
@@ -144,6 +144,84 @@ describe('Quiz Controller', () => {
                 .send({ language: 'JavaScript', level: 1, score: 8 });
 
             expect(res.status).toBe(401);
+        });
+    });
+
+    describe('Progressive level unlocking', () => {
+        it('should reject completing a level before the previous one is validated', async () => {
+            const lang = 'TypeScript';
+
+            const res = await request(app)
+                .post('/api/quiz/complete')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ language: lang, level: 3, score: 8, totalAnswered: 10 });
+
+            expect(res.status).toBe(403);
+
+            await pool.execute('DELETE FROM QuizProgress WHERE user_id = ? AND language = ?', [userId, lang]);
+        });
+
+        it('should unlock the next level only after the previous level is passed', async () => {
+            const lang = 'Python';
+
+            await request(app)
+                .post('/api/quiz/complete')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ language: lang, level: 1, score: 1, totalAnswered: 1 });
+
+            let res = await request(app)
+                .get('/api/quiz/progress')
+                .set('Authorization', `Bearer ${token}`);
+            let prog = res.body.progress.find((p: any) => p.language === lang);
+            expect(prog.current_level).toBe(2);
+            expect(prog.completed_levels).toBe(1);
+
+            // Sauter le niveau 2 doit encore être refusé
+            res = await request(app)
+                .post('/api/quiz/complete')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ language: lang, level: 3, score: 1, totalAnswered: 1 });
+            expect(res.status).toBe(403);
+
+            // Valider le niveau 2 débloque le niveau 3
+            res = await request(app)
+                .post('/api/quiz/complete')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ language: lang, level: 2, score: 1, totalAnswered: 1 });
+            expect(res.status).toBe(200);
+
+            res = await request(app)
+                .get('/api/quiz/progress')
+                .set('Authorization', `Bearer ${token}`);
+            prog = res.body.progress.find((p: any) => p.language === lang);
+            expect(prog.current_level).toBe(3);
+            expect(prog.completed_levels).toBe(2);
+
+            await pool.execute('DELETE FROM QuizProgress WHERE user_id = ? AND language = ?', [userId, lang]);
+        });
+
+        it('should not inflate completed levels when replaying an already passed level', async () => {
+            const lang = 'Go';
+
+            await request(app)
+                .post('/api/quiz/complete')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ language: lang, level: 1, score: 1, totalAnswered: 1 });
+
+            await request(app)
+                .post('/api/quiz/complete')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ language: lang, level: 1, score: 1, totalAnswered: 1 });
+
+            const res = await request(app)
+                .get('/api/quiz/progress')
+                .set('Authorization', `Bearer ${token}`);
+            const prog = res.body.progress.find((p: any) => p.language === lang);
+
+            expect(prog.completed_levels).toBe(1);
+            expect(prog.current_level).toBe(2);
+
+            await pool.execute('DELETE FROM QuizProgress WHERE user_id = ? AND language = ?', [userId, lang]);
         });
     });
 

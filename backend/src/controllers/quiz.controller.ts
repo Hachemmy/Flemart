@@ -92,33 +92,34 @@ export async function submitQuizAnswer(req: Request, res: Response) {
 export async function completeQuizLevel(req: Request, res: Response) {
     const connection = await pool.getConnection();
     try {
-        const { language, level, score } = req.body;
+        const { language, level, score, totalAnswered } = req.body;
         const userId = req.user?.id;
 
         if (!userId) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
 
-        if (!language || !level || score === undefined) {
-            return res.status(400).json({ error: 'language, level, and score are required' });
+        if (!language || !level || score === undefined || totalAnswered === undefined) {
+            return res.status(400).json({ error: 'language, level, score, and totalAnswered are required' });
         }
 
         const levelNum = parseInt(level, 10);
         const scoreNum = parseInt(score, 10);
+        const totalNum = parseInt(totalAnswered, 10);
 
-        if (isNaN(levelNum) || isNaN(scoreNum)) {
-            return res.status(400).json({ error: 'Level and score must be valid numbers' });
+        if (isNaN(levelNum) || isNaN(scoreNum) || isNaN(totalNum)) {
+            return res.status(400).json({ error: 'Level, score, and totalAnswered must be valid numbers' });
         }
 
         if (levelNum < 1 || levelNum > 100) {
             return res.status(400).json({ error: 'Level must be between 1 and 100' });
         }
 
-        if (scoreNum < 0 || scoreNum > 10) {
-            return res.status(400).json({ error: 'Score must be between 0 and 10' });
+        if (scoreNum < 0 || totalNum < 1 || scoreNum > totalNum) {
+            return res.status(400).json({ error: 'Score must be between 0 and totalAnswered' });
         }
 
-        const passed = scoreNum >= 7;
+        const passed = scoreNum / totalNum >= 0.7;
 
         await connection.beginTransaction();
 
@@ -128,6 +129,16 @@ export async function completeQuizLevel(req: Request, res: Response) {
         );
 
         const progress = (existing as any[])[0];
+
+        // Un niveau ne se débloque que lorsque le précédent est validé.
+        // Sans progression, seul le niveau 1 est accessible.
+        const unlockedUpTo = progress ? Number(progress.current_level) : 1;
+        if (levelNum > unlockedUpTo) {
+            await connection.rollback();
+            return res.status(403).json({
+                error: 'This level is not unlocked yet. Complete the previous levels first.',
+            });
+        }
 
         if (!progress) {
             if (passed) {
@@ -142,7 +153,9 @@ export async function completeQuizLevel(req: Request, res: Response) {
                 );
             }
         } else if (passed) {
-            const newCompleted = Number(progress.completed_levels) + 1;
+            // completed_levels ne représente que le niveau le plus élevé validé :
+            // rejouer un niveau déjà réussi ne l'incrémente pas.
+            const newCompleted = Math.min(Math.max(Number(progress.completed_levels), levelNum), 100);
             const newTotalXp = Number(progress.total_xp_earned) + 5;
             const newCurrentLevel = Math.min(Math.max(Number(progress.current_level), levelNum + 1), 100);
 
