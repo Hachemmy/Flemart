@@ -16,7 +16,12 @@ async function getClient(): Promise<OpenAI> {
         try {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 1500);
-            const res = await fetch(`${url}/models`, { signal: controller.signal });
+            const res = await fetch(`${url}/models`, {
+                signal: controller.signal,
+                headers: {
+                    Authorization: `Bearer ${process.env.API_KEY || "lm-studio"}`,
+                },
+            });
             clearTimeout(timer);
             if (res.ok) {
                 cachedClient = new OpenAI({
