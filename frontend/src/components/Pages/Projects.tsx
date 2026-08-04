@@ -457,7 +457,7 @@ export default function Projects() {
                                     className="card p-5 animate-slide-up"
                                     style={{ animationDelay: `${index * 30}ms` }}
                                 >
-                                    <div className="flex items-start justify-between gap-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <h3 className="font-semibold text-gray-900 dark:text-white truncate">
@@ -499,7 +499,7 @@ export default function Projects() {
                                             </a>
                                         </div>
 
-                                        <div className="flex flex-col gap-1.5 flex-shrink-0">
+                                        <div className="flex flex-row flex-wrap gap-1.5 sm:flex-col sm:flex-shrink-0">
                                             {statusOptions.map((opt) => (
                                                 <button
                                                     key={opt.value}
