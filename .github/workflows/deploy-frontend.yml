@@ -1,5 +1,7 @@
 name: Deploy Frontend to Render
 
+# Auto-deploy on push
+
 on:
   push:
     branches: [main]
