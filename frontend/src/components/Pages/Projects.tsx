@@ -354,7 +354,7 @@ export default function Projects() {
                     )}
 
                     {loading && (
-                        <div className="grid gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="card p-6">
                                     <div className="flex justify-between items-start">
@@ -398,7 +398,7 @@ export default function Projects() {
                     )}
 
                     {!loading && !error && filteredProjects.length > 0 && (
-                        <div className="grid gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             {filteredProjects.map((project, index) => (
                                 <div key={project.id} className="animate-slide-up" style={{ animationDelay: `${index * 50}ms` }}>
                                     <ProjectCard
@@ -418,7 +418,7 @@ export default function Projects() {
             {tab === 'github' && (
                 <>
                     {reposLoading && (
-                        <div className="grid gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="card p-6">
                                     <div className="flex justify-between items-start">
@@ -450,7 +450,7 @@ export default function Projects() {
                     )}
 
                     {!reposLoading && repos.length > 0 && (
-                        <div className="grid gap-3">
+                        <div className="grid grid-cols-1 gap-3">
                             {repos.map((repo, index) => (
                                 <div
                                     key={repo.id}
