@@ -14,7 +14,7 @@ export default function Header() {
   const [showPlusMenu, setShowPlusMenu] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 glass border-b border-gray-200/50 dark:border-surface-700/50">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-surface-800/95 backdrop-blur-none border-b border-gray-200/50 dark:border-surface-700/50">
       <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3">
         <Link to="/" className="flex justify-center gap-2 sm:gap-3 rounded-xl" aria-label={t("header.logo")}>
           <img
