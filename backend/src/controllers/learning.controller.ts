@@ -89,6 +89,43 @@ async function searchDuckDuckGo(query: string): Promise<WebResult[]> {
     return results.slice(0, 10);
 }
 
+async function searchBing(query: string): Promise<WebResult[]> {
+    const searchQuery = encodeURIComponent(query);
+    const url = `https://www.bing.com/search?q=${searchQuery}`;
+
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+        },
+        signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+        throw new Error('Bing search failed');
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const results: WebResult[] = [];
+
+    $('li.b_algo').each((_, element) => {
+        const titleEl = $(element).find('h2 a');
+        const snippetEl = $(element).find('.b_caption p');
+
+        const title = titleEl.text().trim();
+        const href = titleEl.attr('href') || '';
+        const snippet = snippetEl.text().trim();
+
+        if (title && href && snippet) {
+            results.push({ title, url: href, snippet });
+        }
+    });
+
+    return results.slice(0, 10);
+}
+
 interface VideoResult {
     title: string;
     url: string;
@@ -192,22 +229,29 @@ export async function searchSolution(req: Request, res: Response) {
             return res.status(400).json({ error: 'Query is required' });
         }
 
-        const [allResults, allVideos] = await Promise.allSettled([
-            searchDuckDuckGo(query),
-            searchYouTube(query),
-        ]);
+        // Try DuckDuckGo first, then fallback to Bing
+        let allResults: WebResult[] = [];
+        try {
+            allResults = await searchDuckDuckGo(query);
+        } catch (error) {
+            console.warn('DuckDuckGo failed, trying Bing...');
+            try {
+                allResults = await searchBing(query);
+            } catch (bingError) {
+                console.warn('Bing also failed:', bingError);
+            }
+        }
 
-        const results = allResults.status === 'fulfilled' ? allResults.value : [];
-        const videos = allVideos.status === 'fulfilled' ? allVideos.value : [];
+        const allVideos = await searchYouTube(query);
 
-        const filteredResults = results.filter(r =>
+        const results = allResults.filter(r =>
             isProgrammingRelated(r.title) || isProgrammingRelated(r.snippet)
         );
-        const filteredVideos = videos.filter(v =>
+        const videos = allVideos.filter(v =>
             isProgrammingRelated(v.title) || isProgrammingRelated(v.channel)
         );
 
-        res.json({ results: filteredResults, videos: filteredVideos });
+        res.json({ results, videos });
     } catch (error) {
         console.error('Web search error:', error);
         res.status(500).json({ error: 'Search failed' });
