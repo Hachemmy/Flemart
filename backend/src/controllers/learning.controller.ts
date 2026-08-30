@@ -56,6 +56,7 @@ async function searchDuckDuckGo(query: string): Promise<WebResult[]> {
             'Accept': 'text/html,application/xhtml+xml',
             'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
         },
+        signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -191,19 +192,22 @@ export async function searchSolution(req: Request, res: Response) {
             return res.status(400).json({ error: 'Query is required' });
         }
 
-        const [allResults, allVideos] = await Promise.all([
+        const [allResults, allVideos] = await Promise.allSettled([
             searchDuckDuckGo(query),
             searchYouTube(query),
         ]);
 
-        const results = allResults.filter(r =>
+        const results = allResults.status === 'fulfilled' ? allResults.value : [];
+        const videos = allVideos.status === 'fulfilled' ? allVideos.value : [];
+
+        const filteredResults = results.filter(r =>
             isProgrammingRelated(r.title) || isProgrammingRelated(r.snippet)
         );
-        const videos = allVideos.filter(v =>
+        const filteredVideos = videos.filter(v =>
             isProgrammingRelated(v.title) || isProgrammingRelated(v.channel)
         );
 
-        res.json({ results, videos });
+        res.json({ results: filteredResults, videos: filteredVideos });
     } catch (error) {
         console.error('Web search error:', error);
         res.status(500).json({ error: 'Search failed' });
