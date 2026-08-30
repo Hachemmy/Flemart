@@ -115,10 +115,20 @@ async function searchBing(query: string): Promise<WebResult[]> {
         const snippetEl = $(element).find('.b_caption p');
 
         const title = titleEl.text().trim();
-        const href = titleEl.attr('href') || '';
+        let href = titleEl.attr('href') || '';
         const snippet = snippetEl.text().trim();
 
-        if (title && href && snippet) {
+        // Bing wraps URLs in redirects, extract the actual URL from the 'u=' parameter
+        const bingMatch = href.match(/u=([^&]+)/);
+        if (bingMatch) {
+            try {
+                href = Buffer.from(bingMatch[1], 'base64').toString('utf-8');
+            } catch {
+                // If decode fails, use the original
+            }
+        }
+
+        if (title && href && snippet && href.startsWith('http')) {
             results.push({ title, url: href, snippet });
         }
     });
