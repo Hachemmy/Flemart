@@ -136,6 +136,54 @@ async function searchBing(query: string): Promise<WebResult[]> {
     return results.slice(0, 10);
 }
 
+async function searchGoogle(query: string): Promise<WebResult[]> {
+    const searchQuery = encodeURIComponent(query);
+    const url = `https://www.google.com/search?q=${searchQuery}`;
+
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+        },
+        signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+        throw new Error('Google search failed');
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const results: WebResult[] = [];
+
+    $('div.g').each((_, element) => {
+        const titleEl = $(element).find('h3');
+        const linkEl = $(element).find('a[href*="url?q="]');
+        const snippetEl = $(element).find('div:nth-of-type(2)');
+
+        const title = titleEl.text().trim();
+        let href = linkEl.attr('href') || '';
+        const snippet = snippetEl.text().trim();
+
+        // Google wraps URLs in /url?q=URL&... format
+        const urlMatch = href.match(/\/url\?q=([^&]+)/);
+        if (urlMatch) {
+            try {
+                href = decodeURIComponent(urlMatch[1]);
+            } catch {
+                href = '';
+            }
+        }
+
+        if (title && href && snippet && href.startsWith('http') && !href.includes('google.com')) {
+            results.push({ title, url: href, snippet });
+        }
+    });
+
+    return results.slice(0, 10);
+}
+
 interface VideoResult {
     title: string;
     url: string;
@@ -239,7 +287,7 @@ export async function searchSolution(req: Request, res: Response) {
             return res.status(400).json({ error: 'Query is required' });
         }
 
-        // Try DuckDuckGo first, then fallback to Bing
+        // Try DuckDuckGo first, then Bing, then Google
         let allResults: WebResult[] = [];
         try {
             allResults = await searchDuckDuckGo(query);
@@ -248,7 +296,12 @@ export async function searchSolution(req: Request, res: Response) {
             try {
                 allResults = await searchBing(query);
             } catch (bingError) {
-                console.warn('Bing also failed:', bingError);
+                console.warn('Bing failed, trying Google...');
+                try {
+                    allResults = await searchGoogle(query);
+                } catch (googleError) {
+                    console.warn('Google also failed:', googleError);
+                }
             }
         }
 
