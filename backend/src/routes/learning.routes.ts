@@ -8,8 +8,8 @@ import {
 
 const router = Router();
 
+router.post('/search', searchSolution);
 router.get('/', getLearningResources);
 router.get('/:id', getLearningResourceById);
-router.post('/search', searchSolution);
 
 export default router;
