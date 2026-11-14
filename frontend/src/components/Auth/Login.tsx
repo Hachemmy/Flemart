@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
@@ -15,19 +15,60 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const { t } = useI18n();
+  const exchangedCodeRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    const userStr = searchParams.get("user");
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        login(user, token);
-        navigate("/");
-      } catch {
-        setError(t("auth.genericError"));
-      }
+    const code = searchParams.get("code");
+    const oauthError = searchParams.get("error");
+
+    if (oauthError) {
+      const errorKey =
+        oauthError === "email_not_verified"
+          ? "auth.emailNotVerified"
+          : oauthError === "github_account_mismatch"
+            ? "auth.githubMismatch"
+            : oauthError === "github_taken"
+              ? "auth.githubTaken"
+              : oauthError === "email_unavailable"
+                ? "auth.emailUnavailable"
+                : "auth.oauthError";
+      setError(t(errorKey));
+      return;
     }
+
+    if (!code || exchangedCodeRef.current === code) return;
+    exchangedCodeRef.current = code;
+
+    let cancelled = false;
+    const exchangeCode = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const response = await fetch(`${getApiUrl()}/api/auth/oauth/exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || t("auth.loginFailed"));
+        }
+        if (cancelled) return;
+        login(data.user, data.token);
+        navigate("/", { replace: true });
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || t("auth.genericError"));
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    exchangeCode();
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams, login, navigate, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {

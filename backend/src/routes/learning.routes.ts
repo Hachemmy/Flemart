@@ -4,11 +4,12 @@ import {
     getLearningResourceById,
     searchSolution
 } from '../controllers/learning.controller';
-
+import { authenticateToken } from '../middlewares/auth.middleware';
+import { searchLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
-router.post('/search', searchSolution);
+router.post('/search', authenticateToken, searchLimiter, searchSolution);
 router.get('/', getLearningResources);
 router.get('/:id', getLearningResourceById);
 

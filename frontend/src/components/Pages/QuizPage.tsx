@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useI18n } from "../../i18n";
-import { getApiUrl } from "../../config/api";
+import { getApiUrl, authorizedFetch } from "../../config/api";
 
 interface QuizQuestion {
   id: number;
@@ -10,7 +10,6 @@ interface QuizQuestion {
   option_b: string;
   option_c: string;
   option_d: string;
-  correct_answer?: string;
 }
 
 interface QuizProgress {
@@ -30,14 +29,16 @@ export default function QuizPage() {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [quizComplete, setQuizComplete] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [levelResult, setLevelResult] = useState<{
     passed: boolean;
     xpEarned: number;
     message: string;
+    score?: number;
+    total?: number;
   } | null>(null);
   const [score, setScore] = useState(0);
   const [totalAnswered, setTotalAnswered] = useState(0);
@@ -45,9 +46,7 @@ export default function QuizPage() {
 
   const fetchLanguages = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiUrl()}/api/quiz/languages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authorizedFetch(`${getApiUrl()}/api/quiz/languages`, token);
       if (!res.ok) return;
       const data = await res.json();
       setLanguages(data.languages || []);
@@ -56,9 +55,7 @@ export default function QuizPage() {
 
   const fetchProgress = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiUrl()}/api/quiz/progress`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authorizedFetch(`${getApiUrl()}/api/quiz/progress`, token);
       if (!res.ok) return;
       const data = await res.json();
       setProgress(data.progress || []);
@@ -80,18 +77,18 @@ export default function QuizPage() {
     setLoading(true);
     setCurrentQ(0);
     setSelectedAnswer(null);
-    setCorrectAnswer(null);
     setIsCorrect(null);
     setQuizComplete(false);
     setLevelResult(null);
     setScore(0);
     setTotalAnswered(0);
     setAnswerError(null);
+    setSessionId(null);
 
     try {
-      const res = await fetch(
+      const res = await authorizedFetch(
         `${getApiUrl()}/api/quiz/${encodeURIComponent(lang)}/questions?level=${level}`,
-        { headers: { Authorization: `Bearer ${token}` } },
+        token,
       );
       if (!res.ok) {
         setQuestions([]);
@@ -99,6 +96,7 @@ export default function QuizPage() {
       }
       const data = await res.json();
       setQuestions(data.questions || []);
+      setSessionId(data.sessionId || null);
     } catch {
       setQuestions([]);
     } finally {
@@ -107,29 +105,24 @@ export default function QuizPage() {
   };
 
   const submitAnswer = async (answer: string) => {
-    if (selectedAnswer || !questions[currentQ]) return;
+    if (selectedAnswer || !questions[currentQ] || !sessionId) return;
     setAnswerError(null);
     setSelectedAnswer(answer);
 
     try {
-      const res = await fetch(`${getApiUrl()}/api/quiz/answer`, {
+      const res = await authorizedFetch(`${getApiUrl()}/api/quiz/answer`, token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ questionId: questions[currentQ].id, answer }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, questionId: questions[currentQ].id, answer }),
       });
       if (!res.ok) throw new Error(t("quiz.answerError"));
       const data = await res.json();
-      const correct = data.correct;
+      const correct = Boolean(data.correct);
       setIsCorrect(correct);
-      setCorrectAnswer(data.correctAnswer || null);
       if (correct) setScore((prev) => prev + 1);
       setTotalAnswered((prev) => prev + 1);
     } catch {
       setIsCorrect(null);
-      setCorrectAnswer(null);
       setSelectedAnswer(null);
       setAnswerError(t("quiz.answerError"));
     }
@@ -139,7 +132,6 @@ export default function QuizPage() {
     if (currentQ < questions.length - 1) {
       setCurrentQ((prev) => prev + 1);
       setSelectedAnswer(null);
-      setCorrectAnswer(null);
       setIsCorrect(null);
     } else {
       finishQuiz();
@@ -147,20 +139,17 @@ export default function QuizPage() {
   };
 
   const finishQuiz = async () => {
+    if (!sessionId) {
+      setAnswerError(t("quiz.answerError"));
+      return;
+    }
+
     setQuizComplete(true);
     try {
-      const res = await fetch(`${getApiUrl()}/api/quiz/complete`, {
+      const res = await authorizedFetch(`${getApiUrl()}/api/quiz/complete`, token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          language: selectedLang,
-          level: selectedLevel,
-          score: score,
-          totalAnswered: totalAnswered,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -168,6 +157,8 @@ export default function QuizPage() {
       }
       const data = await res.json();
       setLevelResult(data);
+      if (typeof data.score === "number") setScore(data.score);
+      if (typeof data.total === "number") setTotalAnswered(data.total);
       await fetchProgress();
     } catch (e) {
       console.error("finishQuiz error:", e);
@@ -181,11 +172,11 @@ export default function QuizPage() {
   const getOptionClass = (key: string) => {
     if (!selectedAnswer)
       return "border-gray-200 dark:border-surface-700 hover:border-brand-300 dark:hover:border-brand-700 hover:bg-brand-50/50 dark:hover:bg-brand-900/10 cursor-pointer";
-    const correctKey = correctAnswer;
-    if (key === correctKey)
-      return "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-600";
-    if (key === selectedAnswer && !isCorrect)
-      return "border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-600";
+    if (key === selectedAnswer) {
+      return isCorrect
+        ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-600"
+        : "border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-600";
+    }
     return "border-gray-200 dark:border-surface-700 opacity-50";
   };
 
@@ -196,10 +187,10 @@ export default function QuizPage() {
     setQuestions([]);
     setCurrentQ(0);
     setSelectedAnswer(null);
-    setCorrectAnswer(null);
     setIsCorrect(null);
     setQuizComplete(false);
     setLevelResult(null);
+    setSessionId(null);
     setScore(0);
     setTotalAnswered(0);
     setAnswerError(null);
@@ -376,7 +367,7 @@ export default function QuizPage() {
             </h2>
 
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {t("quiz.score")} : {score}/{questions.length || 1}
+              {t("quiz.score")} : {levelResult?.score ?? score}/{levelResult?.total ?? (questions.length || 1)}
             </p>
 
             {levelResult?.passed ? (
@@ -396,7 +387,7 @@ export default function QuizPage() {
               >
                 {t("quiz.retry")}
               </button>
-              {levelResult?.passed && selectedLevel! < 100 && (
+              {levelResult?.passed && selectedLevel! < 50 && (
                 <button onClick={goToNextLevel} className="btn-primary">
                   {t("quiz.nextLevel")}
                 </button>
@@ -460,17 +451,17 @@ export default function QuizPage() {
                 </span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                {t("quiz.level")} {currentLevel} — {completedLevels}/100{" "}
+                {t("quiz.level")} {currentLevel} — {completedLevels}/50{" "}
                 {t("quiz.complete")}
               </p>
               <div className="h-2 bg-gray-100 dark:bg-surface-700 rounded-full overflow-hidden mb-4">
                 <div
                   className="h-full bg-brand-500 rounded-full transition-all"
-                  style={{ width: `${completedLevels}%` }}
+                  style={{ width: `${(completedLevels / 50) * 100}%` }}
                 />
               </div>
               <div className="grid grid-cols-10 sm:grid-cols-10 gap-1">
-                {Array.from({ length: 100 }, (_, i) => i + 1).map((level) => {
+                {Array.from({ length: 50 }, (_, i) => i + 1).map((level) => {
                   const isUnlocked = level <= currentLevel;
                   const isCompleted = level <= completedLevels;
                   return (

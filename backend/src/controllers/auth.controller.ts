@@ -4,19 +4,60 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database';
 import { z } from 'zod';
+import { JWT_SECRET, env, isProduction } from '../config/env';
 
-// Pending GitHub link states: state -> { userId, expiresAt }
-const pendingGithubLinks = new Map<string, { userId: number; expiresAt: number }>();
+const OAUTH_STATE_COOKIE = 'oauth_state';
+const OAUTH_STATE_MAX_AGE_MS = 5 * 60 * 1000;
+const OAUTH_CODE_MAX_AGE_MS = 5 * 60 * 1000;
 
-// Cleanup expired states every 60 seconds
-setInterval(() => {
-    const now = Date.now();
-    for (const [key, value] of pendingGithubLinks) {
-        if (value.expiresAt < now) {
-            pendingGithubLinks.delete(key);
-        }
+const oauthCookieOptions = {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: isProduction,
+    path: '/',
+    maxAge: OAUTH_STATE_MAX_AGE_MS,
+};
+
+function parseCookies(req: Request): Record<string, string> {
+    const header = req.headers.cookie;
+    if (!header) return {};
+
+    return header.split(';').reduce((acc, part) => {
+        const index = part.indexOf('=');
+        if (index === -1) return acc;
+        const key = part.slice(0, index).trim();
+        const value = part.slice(index + 1).trim();
+        if (key) acc[key] = decodeURIComponent(value);
+        return acc;
+    }, {} as Record<string, string>);
+}
+
+function signLinkState(userId: number): string {
+    return jwt.sign({ type: 'link', userId }, JWT_SECRET, { expiresIn: '5m' });
+}
+
+function verifyLinkState(state: string): number | null {
+    try {
+        const payload = jwt.verify(state, JWT_SECRET, { algorithms: ['HS256'] }) as {
+            type?: string;
+            userId?: number;
+        };
+        if (payload.type !== 'link' || typeof payload.userId !== 'number') return null;
+        return payload.userId;
+    } catch {
+        return null;
     }
-}, 60_000);
+}
+
+function githubRedirectUri(): string {
+    return `${env.BACKEND_URL || 'http://localhost:5000'}/api/auth/github/callback`;
+}
+
+// Remove expired or already-used one-time OAuth codes.
+const oauthCodeCleanup = setInterval(() => {
+    pool.execute('DELETE FROM OAuthCodes WHERE expires_at < NOW() OR used = TRUE').catch(() => {});
+}, 60 * 60 * 1000);
+oauthCodeCleanup.unref();
 
 const registerSchema = z.object({
     email: z.string().email(),
@@ -57,7 +98,7 @@ export async function register(req: Request, res: Response) {
         // Generate token
         const token = jwt.sign(
             { id: userId, email, username },
-            process.env.JWT_SECRET || 'your_jwt_secret_key_here',
+            JWT_SECRET,
             { expiresIn: '7d' }
         );
 
@@ -95,7 +136,7 @@ export async function login(req: Request, res: Response) {
         // Generate token
         const token = jwt.sign(
             { id: user.id, email: user.email, username: user.username },
-            process.env.JWT_SECRET || 'your_jwt_secret_key_here',
+            JWT_SECRET,
             { expiresIn: '7d' }
         );
 
@@ -194,7 +235,7 @@ export async function updateProfile(req: Request, res: Response) {
 
         const newToken = jwt.sign(
             { id: user.id, email: user.email, username: user.username },
-            process.env.JWT_SECRET || 'your_jwt_secret_key_here',
+            JWT_SECRET,
             { expiresIn: '7d' }
         );
 
@@ -208,13 +249,16 @@ export async function updateProfile(req: Request, res: Response) {
 }
 
 export function githubAuth(req: Request, res: Response) {
-    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientId = env.GITHUB_CLIENT_ID;
     if (!clientId) {
         return res.status(500).json({ error: 'GitHub client ID is not configured' });
     }
-    const redirectUri = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/github/callback`;
+
+    const state = crypto.randomBytes(32).toString('hex');
+    res.cookie(OAUTH_STATE_COOKIE, state, oauthCookieOptions);
+
     const scope = 'read:user user:email';
-    const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&login=`;
+    const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(githubRedirectUri())}&scope=${encodeURIComponent(scope)}&state=${state}&login=`;
     res.redirect(url);
 }
 
@@ -225,16 +269,14 @@ export function githubLink(req: Request, res: Response) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
 
-        const state = crypto.randomUUID();
-        pendingGithubLinks.set(state, {
-            userId,
-            expiresAt: Date.now() + 5 * 60 * 1000,
-        });
+        const clientId = env.GITHUB_CLIENT_ID;
+        if (!clientId) {
+            return res.status(500).json({ error: 'GitHub client ID is not configured' });
+        }
 
-        const clientId = process.env.GITHUB_CLIENT_ID;
-        const redirectUri = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/github/callback`;
+        const state = signLinkState(userId);
         const scope = 'read:user user:email';
-        const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}&login=`;
+        const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(githubRedirectUri())}&scope=${encodeURIComponent(scope)}&state=${state}&login=`;
         res.json({ url });
     } catch {
         res.status(500).json({ error: 'Internal server error' });
@@ -242,10 +284,36 @@ export function githubLink(req: Request, res: Response) {
 }
 
 export async function githubCallback(req: Request, res: Response) {
+    const frontendUrl = env.FRONTEND_URL;
+    const { code, state } = req.query;
+    const linkUserId = typeof state === 'string' ? verifyLinkState(state) : null;
+    const isLinkMode = linkUserId !== null;
+    const errorBase = isLinkMode ? `${frontendUrl}/profile` : `${frontendUrl}/login`;
+
     try {
-        const { code, state } = req.query;
-        if (!code) {
-            return res.status(400).json({ error: 'Code is required' });
+        if (typeof code !== 'string' || !code) {
+            return res.redirect(`${errorBase}?error=oauth_failed`);
+        }
+        if (typeof state !== 'string' || !state) {
+            return res.redirect(`${errorBase}?error=invalid_state`);
+        }
+
+        // Login CSRF protection: the state must match the HttpOnly cookie set by githubAuth.
+        if (!isLinkMode) {
+            const cookieState = parseCookies(req)[OAUTH_STATE_COOKIE];
+            res.clearCookie(OAUTH_STATE_COOKIE, {
+                httpOnly: true,
+                sameSite: 'lax',
+                secure: isProduction,
+                path: '/',
+            });
+            if (!cookieState || cookieState !== state) {
+                return res.redirect(`${errorBase}?error=invalid_state`);
+            }
+        }
+
+        if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
+            return res.redirect(`${errorBase}?error=github_not_configured`);
         }
 
         const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
@@ -255,14 +323,14 @@ export async function githubCallback(req: Request, res: Response) {
                 Accept: 'application/json',
             },
             body: JSON.stringify({
-                client_id: process.env.GITHUB_CLIENT_ID,
-                client_secret: process.env.GITHUB_CLIENT_SECRET,
+                client_id: env.GITHUB_CLIENT_ID,
+                client_secret: env.GITHUB_CLIENT_SECRET,
                 code,
             }),
         });
         const tokenData = (await tokenResponse.json()) as { access_token?: string; error?: string };
         if (tokenData.error || !tokenData.access_token) {
-            return res.status(401).json({ error: 'GitHub authentication failed' });
+            return res.redirect(`${errorBase}?error=oauth_failed`);
         }
 
         const userResponse = await fetch('https://api.github.com/user', {
@@ -271,7 +339,17 @@ export async function githubCallback(req: Request, res: Response) {
                 Accept: 'application/vnd.github.v3+json',
             },
         });
-        const githubUser = (await userResponse.json()) as { id: number; login: string; email?: string; avatar_url: string };
+        if (!userResponse.ok) {
+            return res.redirect(`${errorBase}?error=oauth_failed`);
+        }
+        const githubUser = (await userResponse.json()) as {
+            id: number;
+            login: string;
+            avatar_url?: string;
+        };
+        if (!githubUser.id || !githubUser.login) {
+            return res.redirect(`${errorBase}?error=oauth_failed`);
+        }
 
         const emailResponse = await fetch('https://api.github.com/user/emails', {
             headers: {
@@ -279,61 +357,82 @@ export async function githubCallback(req: Request, res: Response) {
                 Accept: 'application/vnd.github.v3+json',
             },
         });
-        const emails = (await emailResponse.json()) as { email: string; primary: boolean }[];
-        const primaryEmail = emails.find((e) => e.primary)?.email || githubUser.email;
-        const emailToUse = primaryEmail || `${githubUser.login || 'github_user'}@users.noreply.github.com`;
+        if (!emailResponse.ok) {
+            return res.redirect(`${errorBase}?error=email_unavailable`);
+        }
+        const emails = (await emailResponse.json()) as {
+            email: string;
+            primary: boolean;
+            verified: boolean;
+        }[];
+        if (!Array.isArray(emails)) {
+            return res.redirect(`${errorBase}?error=email_unavailable`);
+        }
 
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const verifiedEmail =
+            emails.find((e) => e.primary && e.verified)?.email ||
+            emails.find((e) => e.verified)?.email ||
+            null;
+        if (!verifiedEmail) {
+            return res.redirect(`${errorBase}?error=email_not_verified`);
+        }
 
-        // Link mode: check if state corresponds to a pending GitHub link
-        if (typeof state === 'string' && pendingGithubLinks.has(state)) {
-            const pending = pendingGithubLinks.get(state)!;
-            pendingGithubLinks.delete(state); // One-time use
+        const githubId = String(githubUser.id);
 
-            if (pending.expiresAt < Date.now()) {
-                return res.redirect(`${frontendUrl}/profile?error=expired_link`);
+        // Link mode: signed state carries the authenticated user id.
+        if (isLinkMode) {
+            const [conflict] = await pool.execute(
+                'SELECT id FROM Users WHERE github_id = ? AND id != ?',
+                [githubId, linkUserId]
+            );
+            if ((conflict as any[]).length > 0) {
+                return res.redirect(`${frontendUrl}/profile?error=github_taken`);
             }
 
-            try {
-                // Check if another user already has this github_id
-                const [conflict] = await pool.execute(
-                    'SELECT id FROM Users WHERE github_id = ? AND id != ?',
-                    [String(githubUser.id), pending.userId]
-                );
-                if ((conflict as any[]).length > 0) {
-                    return res.redirect(`${frontendUrl}/profile?error=github_taken`);
-                }
-
-                await pool.execute(
-                    'UPDATE Users SET github_id = ?, photo = COALESCE(photo, ?), github_token = ? WHERE id = ?',
-                    [String(githubUser.id), githubUser.avatar_url, tokenData.access_token, pending.userId]
-                );
-                return res.redirect(`${frontendUrl}/profile?success=github_linked`);
-            } catch {
+            const [linkUser] = await pool.execute('SELECT id FROM Users WHERE id = ?', [linkUserId]);
+            if ((linkUser as any[]).length === 0) {
                 return res.redirect(`${frontendUrl}/profile?error=invalid_token`);
+            }
+
+            await pool.execute(
+                'UPDATE Users SET github_id = ?, photo = COALESCE(photo, ?), github_token = ? WHERE id = ?',
+                [githubId, githubUser.avatar_url || null, tokenData.access_token, linkUserId]
+            );
+            return res.redirect(`${frontendUrl}/profile?success=github_linked`);
+        }
+
+        // Login/register: match by GitHub id first, then by verified email.
+        let existingUser: any;
+        const [byGithubId] = await pool.execute(
+            'SELECT id, username, email, github_id FROM Users WHERE github_id = ?',
+            [githubId]
+        );
+        existingUser = (byGithubId as any[])[0];
+
+        if (!existingUser) {
+            const [byEmail] = await pool.execute(
+                'SELECT id, username, email, github_id FROM Users WHERE email = ?',
+                [verifiedEmail]
+            );
+            const emailUser = (byEmail as any[])[0];
+            if (emailUser) {
+                if (emailUser.github_id && emailUser.github_id !== githubId) {
+                    return res.redirect(`${frontendUrl}/login?error=github_account_mismatch`);
+                }
+                existingUser = emailUser;
             }
         }
 
-        // Normal login/register flow
-        const [existingUsers] = await pool.execute(
-            'SELECT * FROM Users WHERE github_id = ? OR email = ?',
-            [String(githubUser.id), emailToUse]
-        );
-        const existingUser = (existingUsers as any[])[0];
-
         let userId: number;
-        let username: string;
 
         if (existingUser) {
             userId = existingUser.id;
-            username = existingUser.username;
+
             if (!existingUser.github_id) {
-                await pool.execute('UPDATE Users SET github_id = ?, photo = ?, github_token = ? WHERE id = ?', [
-                    String(githubUser.id),
-                    githubUser.avatar_url,
-                    tokenData.access_token,
-                    userId,
-                ]);
+                await pool.execute(
+                    'UPDATE Users SET github_id = ?, photo = ?, github_token = ? WHERE id = ?',
+                    [githubId, githubUser.avatar_url || null, tokenData.access_token, userId]
+                );
             } else {
                 await pool.execute('UPDATE Users SET github_token = ? WHERE id = ?', [
                     tokenData.access_token,
@@ -341,22 +440,101 @@ export async function githubCallback(req: Request, res: Response) {
                 ]);
             }
         } else {
-            username = githubUser.login;
+            const baseUsername =
+                githubUser.login.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30) || 'github_user';
+            let candidate = baseUsername.length >= 3 ? baseUsername : `user_${baseUsername}`;
+
+            for (let i = 0; i < 10; i++) {
+                const [conflict] = await pool.execute('SELECT id FROM Users WHERE username = ?', [
+                    candidate,
+                ]);
+                if ((conflict as any[]).length === 0) break;
+                candidate = `${baseUsername}_${crypto.randomBytes(3).toString('hex')}`;
+            }
+
             const [result] = await pool.execute(
                 'INSERT INTO Users (email, password, username, github_id, photo, github_token) VALUES (?, ?, ?, ?, ?, ?)',
-                [emailToUse, await bcrypt.hash(Math.random().toString(36), 10), username, String(githubUser.id), githubUser.avatar_url, tokenData.access_token]
+                [
+                    verifiedEmail,
+                    await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10),
+                    candidate,
+                    githubId,
+                    githubUser.avatar_url || null,
+                    tokenData.access_token,
+                ]
             );
             userId = (result as any).insertId;
         }
 
-        const jwtToken = jwt.sign(
-            { id: userId, email: emailToUse, username },
-            process.env.JWT_SECRET || 'your_jwt_secret_key_here',
+        // Never put the JWT in a URL. Issue a short-lived, single-use code instead.
+        const oauthCode = crypto.randomBytes(32).toString('hex');
+        await pool.execute(
+            'INSERT INTO OAuthCodes (code, user_id, expires_at) VALUES (?, ?, ?)',
+            [oauthCode, userId, new Date(Date.now() + OAUTH_CODE_MAX_AGE_MS)]
+        );
+
+        res.redirect(`${frontendUrl}/login?code=${oauthCode}`);
+    } catch (error) {
+        console.error('githubCallback error:', error);
+        res.redirect(`${errorBase}?error=oauth_failed`);
+    }
+}
+
+const exchangeSchema = z.object({
+    code: z.string().min(1),
+});
+
+export async function exchangeOAuthCode(req: Request, res: Response) {
+    const connection = await pool.getConnection();
+    let committed = false;
+    try {
+        const { code } = exchangeSchema.parse(req.body);
+
+        await connection.beginTransaction();
+
+        const [rows] = await connection.execute(
+            'SELECT id, user_id, expires_at, used FROM OAuthCodes WHERE code = ? FOR UPDATE',
+            [code]
+        );
+        const record = (rows as any[])[0];
+
+        if (!record || record.used || new Date(record.expires_at).getTime() < Date.now()) {
+            await connection.rollback();
+            return res.status(401).json({ error: 'Invalid or expired code' });
+        }
+
+        await connection.execute('UPDATE OAuthCodes SET used = TRUE WHERE id = ?', [record.id]);
+
+        const [users] = await connection.execute(
+            'SELECT id, email, username, photo, github_id FROM Users WHERE id = ?',
+            [record.user_id]
+        );
+        const user = (users as any[])[0];
+        if (!user) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        await connection.commit();
+        committed = true;
+
+        const token = jwt.sign(
+            { id: user.id, email: user.email, username: user.username },
+            JWT_SECRET,
             { expiresIn: '7d' }
         );
 
-        res.redirect(`${frontendUrl}/login?token=${jwtToken}&user=${encodeURIComponent(JSON.stringify({ id: userId, email: emailToUse, username, photo: githubUser.avatar_url }))}`);
-    } catch (error) {
+        res.json({ token, user });
+    } catch (error: any) {
+        if (!committed) {
+            await connection.rollback();
+        }
+        if (error.name === 'ZodError') {
+            return res.status(400).json({ error: 'Validation error', details: error.errors });
+        }
+        console.error('exchangeOAuthCode error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        connection.release();
     }
 }

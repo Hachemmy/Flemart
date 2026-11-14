@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '../../i18n';
-import { getApiUrl } from '../../config/api';
+import { useAuth } from '../../hooks/useAuth';
+import { getApiUrl, authorizedFetch } from '../../config/api';
 
 interface LearningResource {
     id: number;
@@ -27,8 +28,22 @@ interface VideoResult {
     duration: string;
 }
 
+const QUICK_TOPICS = [
+    'JavaScript',
+    'Python',
+    'React',
+    'Node.js',
+    'SQL',
+    'Git',
+    'HTML/CSS',
+    'Docker',
+    'Algorithmes',
+    'UX Design',
+];
+
 export default function Learning() {
     const { t } = useI18n();
+    const { token } = useAuth();
     const [resources, setResources] = useState<LearningResource[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -38,6 +53,7 @@ export default function Learning() {
     const [isSearching, setIsSearching] = useState<boolean>(false);
     const [hasSearched, setHasSearched] = useState<boolean>(false);
     const [searchError, setSearchError] = useState<string | null>(null);
+    const [filter, setFilter] = useState<'all' | 'web' | 'videos'>('all');
 
     useEffect(() => {
         const fetchResources = async () => {
@@ -55,18 +71,26 @@ export default function Learning() {
         fetchResources();
     }, []);
 
-    const handleSearch = async () => {
-        if (!searchTerm.trim()) return;
+    const handleSearch = async (term: string = searchTerm) => {
+        const query = term.trim();
+        if (!query) return;
+        if (!token) {
+            setSearchError(t('learning.loginRequired'));
+            return;
+        }
+
+        setSearchTerm(term);
         setIsSearching(true);
         setHasSearched(true);
+        setFilter('all');
         setWebResults([]);
         setVideoResults([]);
         setSearchError(null);
         try {
-            const response = await fetch(`${getApiUrl()}/api/learning/search`, {
+            const response = await authorizedFetch(`${getApiUrl()}/api/learning/search`, token, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: searchTerm }),
+                body: JSON.stringify({ query }),
             });
             if (!response.ok) throw new Error('search failed');
             const { results, videos } = await response.json();
@@ -79,6 +103,11 @@ export default function Learning() {
         } finally {
             setIsSearching(false);
         }
+    };
+
+    const searchTopic = (topic: string) => {
+        setSearchTerm(topic);
+        handleSearch(topic);
     };
 
     const getHostname = (url: string) => {
@@ -117,8 +146,8 @@ export default function Learning() {
                         className="input-field flex-1"
                     />
                     <button
-                        onClick={handleSearch}
-                        disabled={isSearching}
+                        onClick={() => handleSearch()}
+                        disabled={isSearching || !token}
                         className="btn-primary whitespace-nowrap"
                     >
                         {isSearching ? (
@@ -131,6 +160,22 @@ export default function Learning() {
                             </span>
                         ) : t('learning.searchButton')}
                     </button>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
+                        {t('learning.topics')}
+                    </span>
+                    {QUICK_TOPICS.map((topic) => (
+                        <button
+                            key={topic}
+                            onClick={() => searchTopic(topic)}
+                            disabled={isSearching || !token}
+                            className="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-surface-700 text-gray-600 dark:text-gray-300 hover:bg-brand-100 dark:hover:bg-brand-900/30 hover:text-brand-700 dark:hover:text-brand-400 transition-colors disabled:opacity-50"
+                        >
+                            {topic}
+                        </button>
+                    ))}
                 </div>
 
                 {searchError && (
@@ -161,8 +206,31 @@ export default function Learning() {
                 )}
 
                 {!isSearching && (webResults.length > 0 || videoResults.length > 0) && (
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="mt-6 flex flex-wrap items-center gap-2">
+                        {[
+                            { key: 'all', label: t('learning.all'), count: webResults.length + videoResults.length },
+                            { key: 'web', label: t('learning.webResults'), count: webResults.length },
+                            { key: 'videos', label: t('learning.videoResults'), count: videoResults.length },
+                        ].map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setFilter(tab.key as 'all' | 'web' | 'videos')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                                    filter === tab.key
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-gray-100 dark:bg-surface-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-surface-600'
+                                }`}
+                            >
+                                {tab.label} ({tab.count})
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {!isSearching && (webResults.length > 0 || videoResults.length > 0) && (
+                    <div className={`mt-4 grid grid-cols-1 ${filter === 'all' ? 'md:grid-cols-2' : ''} gap-4 sm:gap-6`}>
                         {/* Left: Web links */}
+                        {filter !== 'videos' && (
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,8 +257,11 @@ export default function Learning() {
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-xs text-brand-600 dark:text-brand-400 mb-1">
+                                            <p className="text-xs text-brand-600 dark:text-brand-400 mb-1 truncate" title={result.url}>
                                                 {getHostname(result.url)}
+                                            </p>
+                                            <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1 truncate" title={result.url}>
+                                                {result.url}
                                             </p>
                                             <h3 className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-700 dark:group-hover:text-brand-400 transition-colors mb-1 line-clamp-1">
                                                 {result.title}
@@ -206,8 +277,10 @@ export default function Learning() {
                                 </a>
                             ))}
                         </div>
+                        )}
 
                         {/* Right: YouTube videos */}
+                        {filter !== 'web' && (
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
                                 <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
@@ -263,6 +336,7 @@ export default function Learning() {
                                 ))}
                             </div>
                         </div>
+                        )}
                     </div>
                 )}
             </div>

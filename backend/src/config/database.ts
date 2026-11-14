@@ -14,7 +14,8 @@ const pool = mysql.createPool({
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    connectTimeout: 30000
 });
 
 export async function getConnection() {

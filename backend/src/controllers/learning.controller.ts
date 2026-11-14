@@ -86,7 +86,7 @@ async function searchDuckDuckGo(query: string): Promise<WebResult[]> {
         }
     });
 
-    return results.slice(0, 10);
+    return results.slice(0, 30);
 }
 
 async function searchBing(query: string): Promise<WebResult[]> {
@@ -133,7 +133,7 @@ async function searchBing(query: string): Promise<WebResult[]> {
         }
     });
 
-    return results.slice(0, 10);
+    return results.slice(0, 30);
 }
 
 async function searchGoogle(query: string): Promise<WebResult[]> {
@@ -181,7 +181,7 @@ async function searchGoogle(query: string): Promise<WebResult[]> {
         }
     });
 
-    return results.slice(0, 10);
+    return results.slice(0, 30);
 }
 
 interface VideoResult {
@@ -215,34 +215,43 @@ async function searchYouTube(query: string): Promise<VideoResult[]> {
     if (!match) return [];
 
     const data = JSON.parse(match[1]);
-    const tabs = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
-    if (!tabs) return [];
-
     const videos: VideoResult[] = [];
-    for (const item of tabs) {
-        if (!item.videoRenderer) continue;
-        const v = item.videoRenderer;
-        const videoId = v.videoId || '';
-        if (!videoId) continue;
+    const seen = new Set<string>();
 
-        const title = v.title?.runs?.[0]?.text || '';
-        const channel = v.ownerText?.runs?.[0]?.text || '';
-        const viewCount = v.viewCountText?.simpleText || '';
-        const lengthSeconds = v.lengthSeconds ? parseInt(v.lengthSeconds) : 0;
+    const collectVideos = (node: any, depth: number) => {
+        if (!node || typeof node !== 'object' || depth > 12 || videos.length >= 30) return;
 
-        videos.push({
-            title,
-            url: `https://www.youtube.com/watch?v=${videoId}`,
-            videoId,
-            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            channel,
-            views: viewCount,
-            duration: lengthSeconds ? formatDuration(lengthSeconds) : '',
-        });
+        if (node.videoRenderer) {
+            const v = node.videoRenderer;
+            const videoId = v.videoId || '';
+            if (videoId && !seen.has(videoId)) {
+                seen.add(videoId);
+                const lengthSeconds = v.lengthSeconds ? parseInt(v.lengthSeconds, 10) : 0;
+                videos.push({
+                    title: v.title?.runs?.[0]?.text || v.title?.simpleText || '',
+                    url: `https://www.youtube.com/watch?v=${videoId}`,
+                    videoId,
+                    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                    channel: v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || '',
+                    views: v.viewCountText?.simpleText || v.shortViewCountText?.simpleText || '',
+                    duration: lengthSeconds
+                        ? formatDuration(lengthSeconds)
+                        : (v.lengthText?.simpleText || ''),
+                });
+            }
+        }
 
-        if (videos.length >= 10) break;
-    }
+        for (const value of Object.values(node)) {
+            if (videos.length >= 30) return;
+            if (Array.isArray(value)) {
+                for (const item of value) collectVideos(item, depth + 1);
+            } else if (value && typeof value === 'object') {
+                collectVideos(value, depth + 1);
+            }
+        }
+    };
 
+    collectVideos(data, 0);
     return videos;
 }
 
@@ -279,15 +288,37 @@ function isProgrammingRelated(text: string): boolean {
     return PROGRAMMING_KEYWORDS.some(kw => lower.includes(kw));
 }
 
+function dedupeWeb(items: WebResult[]): WebResult[] {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+        const key = item.url.replace(/\/$/, '');
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function dedupeVideos(items: VideoResult[]): VideoResult[] {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+        if (!item.videoId || seen.has(item.videoId)) return false;
+        seen.add(item.videoId);
+        return true;
+    });
+}
+
 export async function searchSolution(req: Request, res: Response) {
     try {
-        const { query } = req.body;
+        const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
 
         if (!query) {
             return res.status(400).json({ error: 'Query is required' });
         }
+        if (query.length > 200) {
+            return res.status(400).json({ error: 'Query is too long' });
+        }
 
-        // Try DuckDuckGo first, then Bing, then Google
+        // Try DuckDuckGo first, then Bing, then Google.
         let allResults: WebResult[] = [];
         try {
             allResults = await searchDuckDuckGo(query);
@@ -305,16 +336,27 @@ export async function searchSolution(req: Request, res: Response) {
             }
         }
 
-        const allVideos = await searchYouTube(query);
+        let allVideos: VideoResult[] = [];
+        try {
+            allVideos = await searchYouTube(query);
+        } catch (error) {
+            console.warn('YouTube search failed:', error);
+        }
 
-        const results = allResults.filter(r =>
-            isProgrammingRelated(r.title) || isProgrammingRelated(r.snippet)
-        );
-        const videos = allVideos.filter(v =>
-            isProgrammingRelated(v.title) || isProgrammingRelated(v.channel)
-        );
+        // Only restrict to programming content when the query itself is about programming.
+        const shouldFilterProgramming = isProgrammingRelated(query);
+        const webPool = shouldFilterProgramming
+            ? allResults.filter(r => isProgrammingRelated(r.title) || isProgrammingRelated(r.snippet))
+            : allResults;
+        const videoPool = shouldFilterProgramming
+            ? allVideos.filter(v => isProgrammingRelated(v.title) || isProgrammingRelated(v.channel))
+            : allVideos;
 
-        res.json({ results, videos });
+        // Aim for 10 links + 10 videos, filling with unfiltered results if needed.
+        const results = dedupeWeb([...webPool, ...allResults]).slice(0, 10);
+        const videos = dedupeVideos([...videoPool, ...allVideos]).slice(0, 10);
+
+        res.json({ query, results, videos });
     } catch (error) {
         console.error('Web search error:', error);
         res.status(500).json({ error: 'Search failed' });

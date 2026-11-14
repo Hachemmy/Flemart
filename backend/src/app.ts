@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
+import { env } from './config/env';
 import authRoutes from './routes/auth.routes';
 import projectRoutes from './routes/project.routes';
 import notificationRoutes from './routes/notification.routes';
@@ -13,20 +13,18 @@ import chatRoutes from './routes/chat.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import { apiLimiter, notificationLimiter } from './middlewares/rateLimiters';
 
-dotenv.config();
-
 const app = express();
 
-// Trust proxy for Render deployment
-app.set('trust proxy', true);
+// Only trust the reverse proxy when explicitly enabled (Render sets TRUST_PROXY=true).
+app.set('trust proxy', env.TRUST_PROXY === 'true' ? 1 : false);
 
 // Middleware
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            connectSrc: ["'self'", process.env.BACKEND_URL || 'http://localhost:5000'],
+            connectSrc: ["'self'", env.BACKEND_URL || 'http://localhost:5000'],
             imgSrc: ["'self'", "data:", "https:"],
             scriptSrc: ["'self'", "'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https:"],
