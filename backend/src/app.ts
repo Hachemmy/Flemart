@@ -15,8 +15,9 @@ import { apiLimiter, notificationLimiter } from './middlewares/rateLimiters';
 
 const app = express();
 
-// Only trust the reverse proxy when explicitly enabled (Render sets TRUST_PROXY=true).
-app.set('trust proxy', env.TRUST_PROXY === 'true' ? 1 : false);
+// Trust the reverse proxy when explicitly enabled or when running on Render.
+const trustProxy = env.TRUST_PROXY === 'true' || process.env.RENDER === 'true';
+app.set('trust proxy', trustProxy ? 1 : false);
 
 // Middleware
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
